@@ -20,7 +20,8 @@ Inspired by the macOS app <i>Zoomies</i>.</p>
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/Electron-2B2E3A?style=flat-square&logo=electron&logoColor=9FEAF9" alt="Electron">
+  <img src="https://img.shields.io/badge/Tauri_2-24C8DB?style=flat-square&logo=tauri&logoColor=white" alt="Tauri 2">
+  <img src="https://img.shields.io/badge/Rust-000000?style=flat-square&logo=rust&logoColor=white" alt="Rust">
   <img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React">
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
 </p>
@@ -31,13 +32,13 @@ Inspired by the macOS app <i>Zoomies</i>.</p>
 
 ## ⬇️ Download
 
-| File | Architecture | Windows |
-| :--- | :--- | :--- |
-| **[DeskPet-Setup.exe ↓](https://github.com/Priyansh-max/deskpet/releases/latest/download/DeskPet-Setup.exe)** | x64 (64-bit) | 10 · 11 |
+| File | Size | Architecture | Windows |
+| :--- | :--- | :--- | :--- |
+| **[DeskPet installer ↓](https://github.com/Priyansh-max/deskpet/releases/latest)** | ~2 MB | x64 (64-bit) | 10 · 11 |
 
-> The direct link goes live once the first release is published — until then, see the
-> [Releases page](https://github.com/Priyansh-max/deskpet/releases) or [build from source](#getting-started).
-> The installer isn't code-signed yet, so Windows SmartScreen may warn on first launch — click **More info → Run anyway**.
+> Built with **Tauri** (uses the built-in WebView2 instead of bundling a browser), so the installer is only **~2 MB**.
+> The link opens the latest release — until the first one is published, [build from source](#getting-started).
+> Not code-signed yet, so SmartScreen may warn on first launch — click **More info → Run anyway**.
 
 ## ✨ Features
 
@@ -50,64 +51,69 @@ Inspired by the macOS app <i>Zoomies</i>.</p>
 
 ## Tech Stack
 
-- **Electron** + **electron-vite** (build tooling)
-- **React** + **TypeScript** (renderer)
-- **systeminformation** (CPU monitoring)
-- **electron-store** (persistence)
-- **koffi** (Win32 interop — taskbar placement & fullscreen detection)
+- **Tauri 2** + **Rust** — native shell that uses the system **WebView2** instead of bundling a browser (hence ~2 MB)
+- **React** + **TypeScript** (UI)
+- **sysinfo** (CPU monitoring)
+- **windows** crate (Win32 interop — taskbar placement, keep-on-top, fullscreen detection)
 
 ## Getting Started
 
+Prerequisites: **Node.js**, the **Rust** toolchain, and **WebView2** (preinstalled on Windows 11).
+
 ```bash
-npm install        # install dependencies
-npm run gen:assets # generate placeholder sprite frames + tray icon
-npm run dev        # run in development with hot reload
+npm install         # install JS dependencies
+npm run tauri:dev   # run the app (builds the Rust backend + Vite frontend)
 ```
 
 ## Build & Package
 
 ```bash
-npm run build      # compile main, preload, and renderer into out/
-npm run package    # build an unpacked Windows app into release/
-npm run dist       # build a Windows NSIS installer into release/
+npm run tauri:build  # build the app + Windows installer
 ```
+
+The installer lands in `src-tauri/target/release/bundle/nsis/`.
 
 ## How It Works
 
 ```
-systeminformation (main)  ──CPU%──▶  IPC  ──▶  React renderer
-        every 1000ms                            fps = 3 + (cpu/100)*15
-                                                 clamped to [3, 18]
+sysinfo (Rust backend)  ──"cpu" event──▶  React UI
+        every 1000ms                       fps = 3 + (cpu/100)*15, clamped to [3, 18]
 ```
 
-The main process samples CPU load once per second and pushes it to the renderer
-over a context-isolated IPC bridge. The renderer maps that value to a frame rate
-and advances the sprite animation accordingly.
+The Rust backend samples CPU load once per second and emits a `cpu` event; the
+React UI maps it to a frame rate and advances the sprite. The chip is a
+transparent, always-on-top window kept in the taskbar band via Win32.
 
 ## Project Structure
 
 ```
+src-tauri/                  # Rust backend (Tauri)
+├── src/main.rs                # window, tray menu, CPU events, persistence
+├── src/win.rs                 # Win32: taskbar placement, keep-on-top, fullscreen
+└── tauri.conf.json            # window + bundle config
 src/
-├── main/          # Electron main process
-│   ├── main.ts        # window + tray + IPC wiring
-│   ├── tray.ts        # system tray menu
-│   ├── cpuMonitor.ts  # polls CPU load
-│   └── store.ts       # persisted preferences
-├── preload/       # context-isolated IPC bridge
-├── renderer/      # React app
+├── renderer/               # React UI
 │   ├── App.tsx
 │   ├── Pet.tsx
+│   ├── tauri.ts               # invoke/event bridge to the Rust backend
 │   ├── hooks/useAnimation.ts
-│   └── assets/{cat,dog}/   # sprite frames
-└── shared/        # types + IPC channel names shared across processes
+│   └── assets/{cat,dog,horse,bird,fish}/   # sprite frames
+└── shared/                 # shared types (PetType, cpuToFps, ...)
+scripts/slice-sprites.cjs   # slice real sprite sheets into frames
 ```
 
-## Replacing the Art
+## Sprites
 
-The included sprites are **placeholders** generated by
-`scripts/generate-assets.cjs`. To use real art, drop transparent PNG frames into
-`src/renderer/assets/<pet>/` named `<pet>_1.png` … `<pet>_8.png` (8 frames). The
-loader picks them up automatically by filename — no code changes needed.
+Each pet is a folder of transparent PNG frames in `src/renderer/assets/<pet>/`
+(`<pet>_1.png`, `<pet>_2.png`, …) that the app cycles through. The loader finds
+them by filename, so the frame count is flexible.
+
+The art is sliced from sprite sheets in `sprite-sheets/` by
+`scripts/slice-sprites.cjs` (background key-out, defringe, trim, downscale). To
+add or swap a pet:
+
+1. Drop frames into `src/renderer/assets/<pet>/` (or add a sheet to the slicer config).
+2. Add the pet id to `PETS` in `src/shared/types.ts` **and** to `PETS` in `src-tauri/src/main.rs`.
 
 ## Contributing
 
