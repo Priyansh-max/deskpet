@@ -11,6 +11,12 @@ use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem,
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, Wry};
 
+#[cfg(windows)]
+mod win;
+
+/// Distance (logical px) the chip keeps from the tray end of the taskbar.
+const EDGE_OFFSET: f64 = 300.0;
+
 const PETS: [(&str, &str); 5] = [
     ("cat", "Cat"),
     ("dog", "Dog"),
@@ -110,6 +116,53 @@ fn handle_menu(app: &AppHandle, id: &str) {
     }
 }
 
+/// Place the chip in the taskbar band, near the system-tray end.
+#[cfg(windows)]
+fn position_chip(window: &tauri::WebviewWindow) {
+    if let Some(tb) = win::taskbar_rect() {
+        let scale = window.scale_factor().unwrap_or(1.0);
+        let width = window.outer_size().map(|s| s.width as i32).unwrap_or(160);
+        let offset = (EDGE_OFFSET * scale) as i32;
+        let x = tb.right - offset - width;
+        let _ = window.set_position(tauri::PhysicalPosition::new(x, tb.top));
+    }
+}
+
+/// Keep the chip above the taskbar (which jumps above us when clicked) and hide
+/// it under genuine fullscreen apps — mirroring taskbar behaviour.
+#[cfg(windows)]
+fn start_keep_alive(window: tauri::WebviewWindow) {
+    std::thread::spawn(move || {
+        let mut hidden = false;
+        loop {
+            std::thread::sleep(Duration::from_millis(350));
+            let raw = match window.hwnd() {
+                Ok(h) => h.0 as isize,
+                Err(_) => continue,
+            };
+            let hwnd = win::hwnd_from_raw(raw);
+            let (mw, mh) = window
+                .primary_monitor()
+                .ok()
+                .flatten()
+                .map(|m| (m.size().width as i32, m.size().height as i32))
+                .unwrap_or((i32::MAX, i32::MAX));
+
+            let fullscreen = win::is_foreground_fullscreen(hwnd, mw, mh);
+            if fullscreen && !hidden {
+                hidden = true;
+                let _ = window.hide();
+            } else if !fullscreen && hidden {
+                hidden = false;
+                let _ = window.show();
+                win::set_topmost(hwnd);
+            } else if !fullscreen {
+                win::set_topmost(hwnd);
+            }
+        }
+    });
+}
+
 fn start_cpu_monitor(app: AppHandle) {
     std::thread::spawn(move || {
         let mut sys = System::new();
@@ -166,6 +219,12 @@ fn main() {
             let mut state = build_tray(&handle, &selected)?;
             state.config_path = config_path;
             app.manage(state);
+
+            #[cfg(windows)]
+            if let Some(window) = handle.get_webview_window("main") {
+                position_chip(&window);
+                start_keep_alive(window);
+            }
 
             start_cpu_monitor(handle);
             Ok(())
