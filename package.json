@@ -2,31 +2,20 @@
   "name": "deskpet",
   "version": "1.0.0",
   "description": "A lightweight Windows desktop pet that reacts to CPU load.",
-  "main": "./out/main/main.js",
   "author": "DeskPet",
   "license": "Apache-2.0",
   "scripts": {
-    "gen:assets": "node scripts/generate-assets.cjs",
+    "dev": "tauri dev",
+    "build": "tauri build",
     "dev:vite": "vite",
     "build:vite": "vite build",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "preview": "electron-vite preview",
-    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
-    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
-    "typecheck": "npm run typecheck:node && npm run typecheck:web",
-    "start": "electron-vite preview",
-    "package": "npm run build && electron-builder --win --dir",
-    "dist": "npm run build && electron-builder --win"
+    "typecheck": "tsc --noEmit -p tsconfig.web.json",
+    "gen:icon": "node scripts/generate-icon.cjs",
+    "slice:sprites": "node scripts/slice-sprites.cjs"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.11.1",
-    "electron-store": "^8.2.0",
-    "koffi": "^3.0.2",
-    "systeminformation": "^5.22.11"
+    "@tauri-apps/api": "^2.11.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.2",
@@ -34,9 +23,7 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
-    "electron": "^31.1.0",
-    "electron-builder": "^24.13.3",
-    "electron-vite": "^2.3.0",
+    "jimp": "^0.22.12",
     "pngjs": "^7.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

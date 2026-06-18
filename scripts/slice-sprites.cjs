@@ -2,21 +2,21 @@
  * Slices real sprite sheets (in each src/renderer/assets/<pet>/) into individual
  * transparent frames named <pet>_1.png ... <pet>_N.png.
  *
- *  - Decodes JPG/PNG via Electron's nativeImage.
+ *  - Decodes JPG/PNG via jimp (pure JS, no Electron).
  *  - Removes a solid background on JPEGs by flood-filling from the cell edges
  *    (so interior same-colored regions are kept).
- *  - Crops all frames of a pet to a shared bounding box (keeps alignment).
+ *  - Trims/centers each frame on a uniform canvas, downscaling oversized art.
  *  - Moves the source sheet to ./sprite-sheets/ so it isn't bundled.
  *
- * Run:  npx electron scripts/slice-sprites.cjs
+ * Run:  npm run slice:sprites   (node scripts/slice-sprites.cjs)
  */
-const { app, nativeImage } = require('electron')
-const { PNG } = require('pngjs')
+const Jimp = require('jimp')
 const fs = require('fs')
 const path = require('path')
 
 const ASSETS = path.join(__dirname, '..', 'src', 'renderer', 'assets')
 const SHEET_OUT = path.join(__dirname, '..', 'sprite-sheets')
+const MAX_SIDE = 128
 
 const SHEETS = {
   // White background, irregular grid (5 on top, 3 on bottom). Empty cells are
@@ -33,18 +33,9 @@ const SHEETS = {
 }
 
 /** Decode an image file to {width,height,data(RGBA)}. */
-function decode(file) {
-  const img = nativeImage.createFromPath(file)
-  const { width, height } = img.getSize()
-  const bgra = img.toBitmap() // BGRA on Windows
-  const data = Buffer.alloc(width * height * 4)
-  for (let i = 0; i < width * height; i++) {
-    data[i * 4] = bgra[i * 4 + 2]
-    data[i * 4 + 1] = bgra[i * 4 + 1]
-    data[i * 4 + 2] = bgra[i * 4]
-    data[i * 4 + 3] = bgra[i * 4 + 3]
-  }
-  return { width, height, data }
+async function decode(file) {
+  const img = await Jimp.read(file)
+  return { width: img.bitmap.width, height: img.bitmap.height, data: img.bitmap.data }
 }
 
 /** Mirror a cell horizontally in place (to flip a left-facing sprite to right). */
@@ -78,12 +69,18 @@ function extract(img, cx, cy, cw, ch) {
   return out
 }
 
+function colorDist(arr, i, seed) {
+  return Math.max(
+    Math.abs(arr[i] - seed[0]),
+    Math.abs(arr[i + 1] - seed[1]),
+    Math.abs(arr[i + 2] - seed[2])
+  )
+}
+
 /**
  * Flood-fill the background to transparent, starting from the cell edges.
  * A pixel counts as background if it's already (near-)transparent OR within
- * `tol` of the seed colour (the corner pixel, or an explicit `seed` such as
- * white). This handles solid backgrounds, baked-in checker/white backgrounds,
- * and stray white halos alike, while keeping interior same-coloured regions.
+ * `tol` of the seed colour (the corner pixel, or an explicit `seed`).
  */
 function keyOutBackground(arr, cw, ch, tol, seed, keepEdge) {
   const s = seed || [arr[0], arr[1], arr[2]]
@@ -94,7 +91,6 @@ function keyOutBackground(arr, cw, ch, tol, seed, keepEdge) {
     visited[y * cw + x] = 1
     stack.push(x, y)
   }
-  // A "subject" pixel is opaque and far from the background colour.
   const isSubject = (x, y) => {
     if (x < 0 || y < 0 || x >= cw || y >= ch) return false
     const j = (y * cw + x) * 4
@@ -114,9 +110,8 @@ function keyOutBackground(arr, cw, ch, tol, seed, keepEdge) {
     const i = (y * cw + x) * 4
     const transparent = arr[i + 3] < 24
     if (!transparent && colorDist(arr, i, s) > tol) continue
-    // keepEdge: when the bg colour equals the subject's outline colour (e.g.
-    // black bg + black outline), keep bg pixels that touch the subject so the
-    // outline survives instead of being eaten away.
+    // keepEdge: when the bg colour equals the subject's outline colour (black bg
+    // + black outline), keep bg pixels that touch the subject so the outline survives.
     if (keepEdge && !transparent && (isSubject(x - 1, y) || isSubject(x + 1, y) || isSubject(x, y - 1) || isSubject(x, y + 1))) {
       continue
     }
@@ -128,14 +123,6 @@ function keyOutBackground(arr, cw, ch, tol, seed, keepEdge) {
   }
 }
 
-function colorDist(arr, i, seed) {
-  return Math.max(
-    Math.abs(arr[i] - seed[0]),
-    Math.abs(arr[i + 1] - seed[1]),
-    Math.abs(arr[i + 2] - seed[2])
-  )
-}
-
 /** Clear any remaining pixel close to the background colour (enclosed specks). */
 function removeNearColor(arr, cw, ch, tol, seed) {
   for (let i = 0; i < arr.length; i += 4) {
@@ -143,11 +130,7 @@ function removeNearColor(arr, cw, ch, tol, seed) {
   }
 }
 
-/**
- * Peel away the anti-aliased halo: repeatedly clear opaque pixels that touch a
- * transparent pixel and are still close-ish to the background colour. Several
- * passes remove successive fringe layers without eating the (far-from-bg) subject.
- */
+/** Peel the anti-aliased halo: clear opaque edge pixels still close to the bg colour. */
 function defringe(arr, cw, ch, fringeTol, seed, passes) {
   for (let p = 0; p < passes; p++) {
     const clear = []
@@ -172,11 +155,7 @@ function defringe(arr, cw, ch, fringeTol, seed, passes) {
   }
 }
 
-/**
- * Keep only the largest connected blob of opaque pixels, dropping floating
- * leftovers (baked-in ground lines, stray specks). The subject of these sprites
- * is a single connected shape, so this is safe.
- */
+/** Keep only the largest connected blob of opaque pixels (drop ground lines/specks). */
 function keepLargestComponent(arr, cw, ch) {
   const label = new Int32Array(cw * ch).fill(-1)
   const sizes = []
@@ -229,7 +208,6 @@ function removeBackground(arr, cw, ch, cfg) {
     removeNearColor(arr, cw, ch, Math.min(cfg.tol, 50), seed)
     keepLargestComponent(arr, cw, ch)
   }
-  // Skip defringe when keepEdge is set — it would erode the outline we kept.
   if (!cfg.keepEdge) {
     defringe(arr, cw, ch, cfg.fringeTol != null ? cfg.fringeTol : cfg.tol + 45, seed, cfg.passes || 3)
   }
@@ -253,8 +231,6 @@ function bbox(arr, cw, ch) {
   return maxX < 0 ? { minX: 0, minY: 0, maxX: cw - 1, maxY: ch - 1 } : { minX, minY, maxX, maxY }
 }
 
-const MAX_SIDE = 128
-
 /** Trim an RGBA cell down to its content bounding box. */
 function trim(arr, cw, ch) {
   const b = bbox(arr, cw, ch)
@@ -274,12 +250,10 @@ function trim(arr, cw, ch) {
   return { data, w, h }
 }
 
-/**
- * Center a trimmed frame on a uniform canvas (so the subject sits in the same
- * place every frame -> smooth animation), then downscale if oversized.
- */
-function writeFrame(frame, canvasW, canvasH, outPath) {
-  const png = new PNG({ width: canvasW, height: canvasH })
+/** Center a trimmed frame on a uniform canvas, downscale if oversized, and write it. */
+async function writeFrame(frame, canvasW, canvasH, outPath) {
+  const out = new Jimp(canvasW, canvasH, 0x00000000)
+  const data = out.bitmap.data
   const ox = Math.round((canvasW - frame.w) / 2)
   const oy = Math.round((canvasH - frame.h) / 2)
   for (let y = 0; y < frame.h; y++) {
@@ -289,36 +263,30 @@ function writeFrame(frame, canvasW, canvasH, outPath) {
       if (px < 0 || py < 0 || px >= canvasW || py >= canvasH) continue
       const si = (y * frame.w + x) * 4
       const di = (py * canvasW + px) * 4
-      png.data[di] = frame.data[si]
-      png.data[di + 1] = frame.data[si + 1]
-      png.data[di + 2] = frame.data[si + 2]
-      png.data[di + 3] = frame.data[si + 3]
+      data[di] = frame.data[si]
+      data[di + 1] = frame.data[si + 1]
+      data[di + 2] = frame.data[si + 2]
+      data[di + 3] = frame.data[si + 3]
     }
   }
-  let buf = PNG.sync.write(png)
   const longest = Math.max(canvasW, canvasH)
   if (longest > MAX_SIDE) {
     const scale = MAX_SIDE / longest
-    buf = nativeImage
-      .createFromBuffer(buf)
-      .resize({ width: Math.round(canvasW * scale), height: Math.round(canvasH * scale), quality: 'best' })
-      .toPNG()
+    out.resize(Math.round(canvasW * scale), Math.round(canvasH * scale))
   }
-  fs.writeFileSync(outPath, buf)
+  await out.writeAsync(outPath)
 }
 
-function processPet(pet, cfg) {
+async function processPet(pet, cfg) {
   const dir = path.join(ASSETS, pet)
-  // Read the sheet from the assets dir, or from where a prior run moved it.
   const inDir = path.join(dir, cfg.file)
   const moved = path.join(SHEET_OUT, cfg.file)
   const src = fs.existsSync(inDir) ? inDir : moved
-  const img = decode(src)
+  const img = await decode(src)
   const cw = Math.floor(img.width / cfg.cols)
   const ch = Math.floor(img.height / cfg.rows)
 
   // Slice, key out background, then trim each frame to its own content.
-  // rowsUsed lets us take just the top N rows of a multi-row sheet.
   const frames = []
   const rowsUsed = cfg.rowsUsed || cfg.rows
   for (let r = 0; r < rowsUsed; r++) {
@@ -336,12 +304,12 @@ function processPet(pet, cfg) {
   const canvasW = Math.max(...frames.map((f) => f.w))
   const canvasH = Math.max(...frames.map((f) => f.h))
 
-  // Remove old frames, write new ones.
   const frameRe = new RegExp(`^${pet}_\\d+\\.png$`)
   for (const f of fs.readdirSync(dir)) if (frameRe.test(f)) fs.unlinkSync(path.join(dir, f))
-  frames.forEach((f, i) => writeFrame(f, canvasW, canvasH, path.join(dir, `${pet}_${i + 1}.png`)))
+  for (let i = 0; i < frames.length; i++) {
+    await writeFrame(frames[i], canvasW, canvasH, path.join(dir, `${pet}_${i + 1}.png`))
+  }
 
-  // Move the source sheet out of the bundled assets dir (if still there).
   fs.mkdirSync(SHEET_OUT, { recursive: true })
   if (src === inDir) {
     if (fs.existsSync(moved)) fs.unlinkSync(moved)
@@ -351,13 +319,14 @@ function processPet(pet, cfg) {
   console.log(`${pet}: ${frames.length} frames, canvas ${canvasW}x${canvasH}`)
 }
 
-app.whenReady().then(() => {
+async function main() {
   for (const [pet, cfg] of Object.entries(SHEETS)) {
     try {
-      processPet(pet, cfg)
+      await processPet(pet, cfg)
     } catch (e) {
       console.log(`${pet}: FAILED ${e.message}`)
     }
   }
-  app.quit()
-})
+}
+
+main()
