@@ -4,7 +4,7 @@
   "description": "A lightweight Windows desktop pet that reacts to CPU load.",
   "main": "./out/main/main.js",
   "author": "DeskPet",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "gen:assets": "node scripts/generate-assets.cjs",
     "dev": "electron-vite dev",
