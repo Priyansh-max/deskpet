@@ -6,5 +6,8 @@ release/
 *.tsbuildinfo
 .DS_Store
 
+# Reference screenshots dropped in the project root
+Screenshot*.png
+
 # Local Claude Code settings
 .claude/

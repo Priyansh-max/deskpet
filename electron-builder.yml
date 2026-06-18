@@ -17,7 +17,8 @@ win:
     - target: nsis
       arch:
         - x64
-  artifactName: ${productName}-${version}-Setup.${ext}
+  # Stable, unversioned name so the "latest release" download URL never changes.
+  artifactName: ${productName}-Setup.${ext}
 nsis:
   oneClick: false
   perMachine: false

@@ -1,20 +1,53 @@
-# 🐾 DeskPet
+<div align="center">
 
-A lightweight Windows desktop companion that reacts to your system load. A small
-animated pet sits on your desktop and speeds up as your CPU gets busier — idle CPU
-means a slow stroll, heavy load (compiling, gaming, rendering) makes it zoom.
+<h1>🐾 DeskPet</h1>
 
-Inspired by the macOS app *Zoomies*. Understand your PC activity at a glance,
-without opening Task Manager.
+<p><b>A lightweight desktop companion that lives in your Windows taskbar and runs faster as your CPU heats up.</b></p>
 
-## Features (V1)
+<p><i>Idle CPU → a slow stroll · Heavy load → full zoom — your PC activity, at a glance.</i><br/>
+Inspired by the macOS app <i>Zoomies</i>.</p>
 
-- Transparent, frameless, always-on-top pet window in the bottom-right corner
-- Animation speed scales smoothly with CPU load (3–18 FPS)
-- Two pets: **Cat** and **Dog**, switchable from the tray
-- Pause / resume animation from the tray
-- Pet choice persists across restarts
-- Runs from the system tray — no taskbar clutter
+<p>
+  <a href="https://github.com/Priyansh-max/deskpet/releases/latest">
+    <img src="https://img.shields.io/badge/Download-Windows%2010%20%7C%2011-2ea44f?style=for-the-badge&logo=windows&logoColor=white" alt="Download DeskPet for Windows" height="40">
+  </a>
+</p>
+
+<p>
+  <a href="https://github.com/Priyansh-max/deskpet/releases"><img src="https://img.shields.io/github/v/release/Priyansh-max/deskpet?style=flat-square&label=version&color=4c9aff" alt="Latest version"></a>
+  <a href="https://github.com/Priyansh-max/deskpet/releases"><img src="https://img.shields.io/github/downloads/Priyansh-max/deskpet/total?style=flat-square&color=2ea44f&label=downloads" alt="Downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Priyansh-max/deskpet?style=flat-square&color=blue" alt="License"></a>
+  <img src="https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Platform: Windows">
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/Electron-2B2E3A?style=flat-square&logo=electron&logoColor=9FEAF9" alt="Electron">
+  <img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React">
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
+</p>
+
+</div>
+
+---
+
+## ⬇️ Download
+
+| File | Architecture | Windows |
+| :--- | :--- | :--- |
+| **[DeskPet-Setup.exe ↓](https://github.com/Priyansh-max/deskpet/releases/latest/download/DeskPet-Setup.exe)** | x64 (64-bit) | 10 · 11 |
+
+> The direct link goes live once the first release is published — until then, see the
+> [Releases page](https://github.com/Priyansh-max/deskpet/releases) or [build from source](#getting-started).
+> The installer isn't code-signed yet, so Windows SmartScreen may warn on first launch — click **More info → Run anyway**.
+
+## ✨ Features
+
+- 🐾 Lives **inside the taskbar** as a small chip — the pet plus a live CPU&nbsp;% readout
+- ⚡ Animation speed scales with CPU load (**3–18 FPS**): idle strolls, heavy load zooms
+- 🐱 **Five pets** — Cat, Dog, Horse, Bird, Fish
+- 🖱️ **Click the chip** for the menu: change pet · pause/resume · quit
+- 🖥️ Hides under fullscreen apps and stays put — behaves like a native taskbar element
+- 💾 Your chosen pet **persists** across restarts
 
 ## Tech Stack
 
@@ -22,6 +55,7 @@ without opening Task Manager.
 - **React** + **TypeScript** (renderer)
 - **systeminformation** (CPU monitoring)
 - **electron-store** (persistence)
+- **koffi** (Win32 interop — taskbar placement & fullscreen detection)
 
 ## Getting Started
 
