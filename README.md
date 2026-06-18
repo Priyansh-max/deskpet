@@ -14,10 +14,9 @@ Inspired by the macOS app <i>Zoomies</i>.</p>
 </p>
 
 <p>
-  <a href="https://github.com/Priyansh-max/deskpet/releases"><img src="https://img.shields.io/github/v/release/Priyansh-max/deskpet?style=flat-square&label=version&color=4c9aff" alt="Latest version"></a>
-  <a href="https://github.com/Priyansh-max/deskpet/releases"><img src="https://img.shields.io/github/downloads/Priyansh-max/deskpet/total?style=flat-square&color=2ea44f&label=downloads" alt="Downloads"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/Priyansh-max/deskpet?style=flat-square&color=blue" alt="License"></a>
-  <img src="https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Platform: Windows">
+  <img src="https://img.shields.io/badge/version-1.0.0-4c9aff?style=flat-square" alt="Version 1.0.0">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License: Apache 2.0"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Platform: Windows 10 | 11">
 </p>
 
 <p>
