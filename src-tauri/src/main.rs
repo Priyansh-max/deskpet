@@ -188,11 +188,12 @@ fn build_tray(app: &AppHandle, selected: &str) -> tauri::Result<AppState> {
     let sep = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(app, &[&change_pet, &pause_item, &sep, &quit])?;
 
+    // Menu events (tray and chip popup) are handled by the global
+    // Builder::on_menu_event so each event fires exactly once.
     TrayIconBuilder::new()
         .icon(app.default_window_icon().cloned().unwrap())
         .tooltip("DeskPet")
         .menu(&menu)
-        .on_menu_event(|app, event| handle_menu(app, event.id.as_ref()))
         .build(app)?;
 
     Ok(AppState {

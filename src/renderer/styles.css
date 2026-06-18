@@ -60,10 +60,10 @@ body,
     drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.45));
 }
 
-/* The horse reads a little small; give it slightly more room. */
+/* The horse reads a little small; scale it up visually without changing the
+   layout box, so the pill (and window) stay a fixed size for every pet. */
 .widget__pet--horse {
-  width: 33px;
-  height: 33px;
+  transform: scale(1.2);
 }
 
 .widget__cpu {
