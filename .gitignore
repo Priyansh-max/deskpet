@@ -11,3 +11,6 @@ Screenshot*.png
 
 # Local Claude Code settings
 .claude/
+
+# Rust / Tauri build output
+src-tauri/target/

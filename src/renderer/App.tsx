@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import { DEFAULT_PREFERENCES, type PetType } from '../shared/types'
 import { Pet } from './Pet'
+import {
+  getInitialState,
+  onCpuUpdate,
+  onPetChanged,
+  onPauseChanged,
+  openMenu
+} from './tauri'
 
 export function App(): JSX.Element {
   const [pet, setPet] = useState<PetType>(DEFAULT_PREFERENCES.selectedPet)
@@ -8,15 +15,15 @@ export function App(): JSX.Element {
   const [paused, setPaused] = useState(false)
 
   useEffect(() => {
-    void window.deskpet.getInitialState().then((state) => {
+    void getInitialState().then((state) => {
       setPet(state.selectedPet)
       setPaused(state.paused)
     })
 
     const unsubscribers = [
-      window.deskpet.onCpuUpdate(setCpu),
-      window.deskpet.onPetChanged(setPet),
-      window.deskpet.onPauseChanged(setPaused)
+      onCpuUpdate(setCpu),
+      onPetChanged(setPet),
+      onPauseChanged(setPaused)
     ]
 
     return () => unsubscribers.forEach((off) => off())
@@ -27,7 +34,7 @@ export function App(): JSX.Element {
       <button
         type="button"
         className="widget"
-        onClick={() => window.deskpet.openMenu()}
+        onClick={() => openMenu()}
         aria-label="DeskPet — open menu"
       >
         <Pet pet={pet} cpu={cpu} paused={paused} />

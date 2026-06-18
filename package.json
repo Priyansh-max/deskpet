@@ -7,6 +7,11 @@
   "license": "Apache-2.0",
   "scripts": {
     "gen:assets": "node scripts/generate-assets.cjs",
+    "dev:vite": "vite",
+    "build:vite": "vite build",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
@@ -18,11 +23,13 @@
     "dist": "npm run build && electron-builder --win"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
     "electron-store": "^8.2.0",
     "koffi": "^3.0.2",
     "systeminformation": "^5.22.11"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
     "@types/node": "^20.14.9",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
