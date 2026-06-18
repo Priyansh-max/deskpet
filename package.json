@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "electron-store": "^8.2.0",
+    "koffi": "^3.0.2",
     "systeminformation": "^5.22.11"
   },
   "devDependencies": {

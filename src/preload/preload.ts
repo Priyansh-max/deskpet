@@ -12,6 +12,8 @@ export interface DeskPetApi {
   onCpuUpdate: (cb: (load: number) => void) => () => void
   onPetChanged: (cb: (pet: PetType) => void) => () => void
   onPauseChanged: (cb: (paused: boolean) => void) => () => void
+  /** Ask main to show the context menu (Change Pet / Pause / Quit). */
+  openMenu: () => void
 }
 
 function subscribe<T>(channel: string, cb: (value: T) => void): () => void {
@@ -24,7 +26,8 @@ const api: DeskPetApi = {
   getInitialState: () => ipcRenderer.invoke(IPC.getInitialState),
   onCpuUpdate: (cb) => subscribe<number>(IPC.cpuUpdate, cb),
   onPetChanged: (cb) => subscribe<PetType>(IPC.petChanged, cb),
-  onPauseChanged: (cb) => subscribe<boolean>(IPC.pauseChanged, cb)
+  onPauseChanged: (cb) => subscribe<boolean>(IPC.pauseChanged, cb),
+  openMenu: () => ipcRenderer.send(IPC.chipClick)
 }
 
 contextBridge.exposeInMainWorld('deskpet', api)

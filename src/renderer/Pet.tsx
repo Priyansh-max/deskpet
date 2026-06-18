@@ -9,7 +9,7 @@ interface PetProps {
   paused: boolean
 }
 
-export function Pet({ pet, cpu, paused }: PetProps): JSX.Element {
+export function Pet({ pet, cpu, paused }: PetProps): JSX.Element | null {
   const frames = useMemo(() => getFrames(pet), [pet])
   const fps = cpuToFps(cpu)
 
@@ -21,16 +21,14 @@ export function Pet({ pet, cpu, paused }: PetProps): JSX.Element {
 
   const src = frames[frame] ?? frames[0]
 
+  if (!src) return null
+
   return (
-    <div className="pet">
-      {src ? (
-        <img
-          className="pet__frame"
-          src={src}
-          alt={pet}
-          draggable={false}
-        />
-      ) : null}
-    </div>
+    <img
+      className={`widget__pet widget__pet--${pet}`}
+      src={src}
+      alt={pet}
+      draggable={false}
+    />
   )
 }

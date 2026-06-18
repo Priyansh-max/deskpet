@@ -8,5 +8,7 @@ export const IPC = {
   /** Main -> renderer: animation pause state toggled (boolean). */
   pauseChanged: 'pause:changed',
   /** Renderer -> main: request the current state on startup. */
-  getInitialState: 'state:get'
+  getInitialState: 'state:get',
+  /** Renderer -> main: the chip was clicked; show the context menu. */
+  chipClick: 'chip:click'
 } as const

@@ -2,7 +2,7 @@ import { app, Menu, Tray, nativeImage } from 'electron'
 import { join } from 'path'
 import { PETS, type PetType } from '../shared/types'
 
-interface TrayCallbacks {
+export interface TrayCallbacks {
   getSelectedPet: () => PetType
   getPaused: () => boolean
   onSelectPet: (pet: PetType) => void
@@ -14,10 +14,14 @@ let tray: Tray | null = null
 
 const PET_LABELS: Record<PetType, string> = {
   cat: 'Cat',
-  dog: 'Dog'
+  dog: 'Dog',
+  horse: 'Horse',
+  bird: 'Bird',
+  fish: 'Fish'
 }
 
-function buildMenu(cb: TrayCallbacks): Menu {
+/** Build the context menu shared by the tray icon and the chip's click menu. */
+export function buildContextMenu(cb: TrayCallbacks): Menu {
   return Menu.buildFromTemplate([
     { label: '🐾 DeskPet', enabled: false },
     { type: 'separator' },
@@ -57,14 +61,14 @@ function trayIcon(): Electron.NativeImage {
 export function createTray(cb: TrayCallbacks): Tray {
   tray = new Tray(trayIcon())
   tray.setToolTip('DeskPet')
-  tray.setContextMenu(buildMenu(cb))
+  tray.setContextMenu(buildContextMenu(cb))
   return tray
 }
 
 /** Rebuild the menu so radio/checkbox states reflect the latest preferences. */
 export function refreshTray(cb: TrayCallbacks): void {
   if (tray) {
-    tray.setContextMenu(buildMenu(cb))
+    tray.setContextMenu(buildContextMenu(cb))
   }
 }
 

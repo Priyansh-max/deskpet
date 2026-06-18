@@ -8,7 +8,6 @@ export function App(): JSX.Element {
   const [paused, setPaused] = useState(false)
 
   useEffect(() => {
-    // Pull the persisted pet and current pause state once on mount.
     void window.deskpet.getInitialState().then((state) => {
       setPet(state.selectedPet)
       setPaused(state.paused)
@@ -23,5 +22,19 @@ export function App(): JSX.Element {
     return () => unsubscribers.forEach((off) => off())
   }, [])
 
-  return <Pet pet={pet} cpu={cpu} paused={paused} />
+  return (
+    <div className="deskpet">
+      <button
+        type="button"
+        className="widget"
+        onClick={() => window.deskpet.openMenu()}
+        aria-label="DeskPet — open menu"
+      >
+        <Pet pet={pet} cpu={cpu} paused={paused} />
+        <span className="widget__cpu">
+          <span className="widget__num">{Math.round(cpu)}</span>%
+        </span>
+      </button>
+    </div>
+  )
 }

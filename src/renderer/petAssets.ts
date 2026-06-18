@@ -19,7 +19,7 @@ function frameIndex(path: string): number {
 
 function buildFrames(pet: PetType): string[] {
   return Object.entries(frameModules)
-    .filter(([path]) => path.includes(`/assets/${pet}/`))
+    .filter(([path]) => path.includes(`/assets/${pet}/`) && /_\d+\.png$/.test(path))
     .sort((a, b) => frameIndex(a[0]) - frameIndex(b[0]))
     .map(([, url]) => url)
 }

@@ -1,45 +1,75 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron'
 import { join } from 'path'
 import { IPC } from '../shared/ipc'
-import {
-  WINDOW_WIDTH,
-  WINDOW_HEIGHT,
-  type PetType
-} from '../shared/types'
+import { TASKBAR_CHIP_LENGTH, TASKBAR_PET_EDGE_OFFSET, type PetType } from '../shared/types'
 import { getSelectedPet, setSelectedPet } from './store'
 import { startCpuMonitor } from './cpuMonitor'
-import { createTray, refreshTray, destroyTray } from './tray'
+import {
+  createTray,
+  refreshTray,
+  destroyTray,
+  buildContextMenu,
+  type TrayCallbacks
+} from './tray'
+import { getPrimaryTaskbarBounds, type TaskbarBounds } from './taskbar'
+import { hwndOf, isForegroundFullscreen, setTopmost } from './win32'
+
+// Stop Chromium from blanking the transparent widget when it thinks it's
+// covered. (Hardware acceleration is intentionally LEFT ON — disabling it makes
+// transparent layered windows flicker on activation.)
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 
 let petWindow: BrowserWindow | null = null
+let petHwnd: bigint | null = null
 let stopCpuMonitor: (() => void) | null = null
+let keepOnTopTimer: NodeJS.Timeout | null = null
+let hiddenForFullscreen = false
+let menuOpen = false
 
-// In-memory runtime state. The selected pet is persisted; pause is session-only.
 let selectedPet: PetType = 'cat'
 let paused = false
 
-function send(channel: string, payload: unknown): void {
-  if (petWindow && !petWindow.isDestroyed()) {
-    petWindow.webContents.send(channel, payload)
+function send(channel: string, payload?: unknown): void {
+  const wc = petWindow?.webContents
+  if (wc && !petWindow!.isDestroyed() && !wc.isDestroyed()) {
+    try {
+      wc.send(channel, payload)
+    } catch {
+      // The render frame can be disposed mid-send during teardown; ignore.
+    }
   }
 }
 
-function createPetWindow(): void {
-  const primary = screen.getPrimaryDisplay()
-  const { width, height } = primary.workAreaSize
-  const { x: areaX, y: areaY } = primary.workArea
+/** Compute the chip's rectangle (DIP) inside the taskbar band, near the tray. */
+function computeChipBounds(tb: TaskbarBounds): Electron.Rectangle {
+  if (tb.edge === 'left' || tb.edge === 'right') {
+    return {
+      x: tb.x,
+      y: Math.round(tb.y + tb.height - TASKBAR_PET_EDGE_OFFSET - TASKBAR_CHIP_LENGTH),
+      width: tb.thickness,
+      height: TASKBAR_CHIP_LENGTH
+    }
+  }
+  return {
+    x: Math.round(tb.x + tb.width - TASKBAR_PET_EDGE_OFFSET - TASKBAR_CHIP_LENGTH),
+    y: tb.y,
+    width: TASKBAR_CHIP_LENGTH,
+    height: tb.thickness
+  }
+}
 
-  // Anchor to the bottom-right corner of the primary display's work area,
-  // with a small margin so the pet does not hug the screen edge.
-  const margin = 12
-  const x = areaX + width - WINDOW_WIDTH - margin
-  const y = areaY + height - WINDOW_HEIGHT - margin
+function positionChip(): void {
+  if (!petWindow || petWindow.isDestroyed()) return
+  petWindow.setBounds(computeChipBounds(getPrimaryTaskbarBounds()))
+}
+
+function createPetWindow(): void {
+  const bounds = computeChipBounds(getPrimaryTaskbarBounds())
 
   petWindow = new BrowserWindow({
-    width: WINDOW_WIDTH,
-    height: WINDOW_HEIGHT,
-    x,
-    y,
+    ...bounds,
     transparent: true,
+    backgroundColor: '#00000000',
     frame: false,
     alwaysOnTop: true,
     skipTaskbar: true,
@@ -49,19 +79,19 @@ function createPetWindow(): void {
     fullscreenable: false,
     hasShadow: false,
     show: false,
+    paintWhenInitiallyHidden: true,
     webPreferences: {
       preload: join(__dirname, '../preload/preload.js'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      backgroundThrottling: false
     }
   })
 
+  petHwnd = hwndOf(petWindow.getNativeWindowHandle())
+  // Sit above the taskbar (itself a topmost window). Set once.
   petWindow.setAlwaysOnTop(true, 'screen-saver')
-
-  petWindow.once('ready-to-show', () => {
-    petWindow?.show()
-  })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     void petWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -69,45 +99,87 @@ function createPetWindow(): void {
     void petWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  petWindow.once('ready-to-show', () => {
+    petWindow?.showInactive()
+    positionChip()
+  })
+
   if (process.env['DESKPET_DEBUG']) {
     petWindow.webContents.on('did-finish-load', () => console.log('[deskpet] renderer loaded'))
-    petWindow.webContents.on('did-fail-load', (_e, code, desc) =>
-      console.error('[deskpet] renderer failed to load', code, desc)
-    )
     petWindow.webContents.on('console-message', (_e, _lvl, message) =>
       console.log('[deskpet][renderer]', message)
     )
   }
 }
 
-function trayCallbacks() {
-  return {
-    getSelectedPet: () => selectedPet,
-    getPaused: () => paused,
-    onSelectPet: (pet: PetType) => {
-      if (pet === selectedPet) return
-      selectedPet = pet
-      setSelectedPet(pet)
-      send(IPC.petChanged, pet)
-      refreshTray(trayCallbacks())
-    },
-    onTogglePause: () => {
-      paused = !paused
-      send(IPC.pauseChanged, paused)
-      refreshTray(trayCallbacks())
-    },
-    onQuit: () => {
-      app.quit()
-    }
+/** Hide the widget only while a genuine fullscreen app is foreground. */
+function updateFullscreenVisibility(): void {
+  if (!petWindow || petWindow.isDestroyed() || !petHwnd) return
+
+  const disp = screen.getPrimaryDisplay()
+  const monitor = {
+    width: Math.round(disp.bounds.width * disp.scaleFactor),
+    height: Math.round(disp.bounds.height * disp.scaleFactor)
+  }
+
+  const fullscreen = isForegroundFullscreen(petHwnd, monitor)
+  if (fullscreen && !hiddenForFullscreen) {
+    hiddenForFullscreen = true
+    petWindow.hide()
+  } else if (!fullscreen && hiddenForFullscreen) {
+    hiddenForFullscreen = false
+    petWindow.showInactive()
+    positionChip()
+    petWindow.setAlwaysOnTop(true, 'screen-saver')
   }
 }
 
+// --- Actions, shared by the tray menu and the chip's click menu. ---
+
+function selectPet(pet: PetType): void {
+  if (pet === selectedPet) return
+  selectedPet = pet
+  setSelectedPet(pet)
+  send(IPC.petChanged, pet)
+  refreshTray(trayCallbacks())
+}
+
+function togglePause(): void {
+  paused = !paused
+  send(IPC.pauseChanged, paused)
+  refreshTray(trayCallbacks())
+}
+
+function quitApp(): void {
+  app.quit()
+}
+
+function trayCallbacks(): TrayCallbacks {
+  return {
+    getSelectedPet: () => selectedPet,
+    getPaused: () => paused,
+    onSelectPet: selectPet,
+    onTogglePause: togglePause,
+    onQuit: quitApp
+  }
+}
+
+function popupMenu(): void {
+  if (!petWindow || petWindow.isDestroyed()) return
+  // Pause the topmost re-assert while the menu is open, otherwise it would keep
+  // shoving the widget above the menu.
+  menuOpen = true
+  buildContextMenu(trayCallbacks()).popup({
+    window: petWindow,
+    callback: () => {
+      menuOpen = false
+    }
+  })
+}
+
 function registerIpc(): void {
-  // Renderer asks for the current state once it has mounted.
-  ipcMain.handle(IPC.getInitialState, () => ({
-    selectedPet,
-    paused
-  }))
+  ipcMain.handle(IPC.getInitialState, () => ({ selectedPet, paused }))
+  ipcMain.on(IPC.chipClick, popupMenu)
 }
 
 app.whenReady().then(() => {
@@ -117,14 +189,18 @@ app.whenReady().then(() => {
   createPetWindow()
   createTray(trayCallbacks())
 
-  let loggedFirstSample = false
-  stopCpuMonitor = startCpuMonitor((load) => {
-    if (process.env['DESKPET_DEBUG'] && !loggedFirstSample) {
-      loggedFirstSample = true
-      console.log(`[deskpet] first CPU sample: ${load.toFixed(1)}%`)
-    }
-    send(IPC.cpuUpdate, load)
-  })
+  screen.on('display-metrics-changed', positionChip)
+  screen.on('display-added', positionChip)
+  screen.on('display-removed', positionChip)
+
+  // Keep the widget above the taskbar (which jumps above us when clicked) and
+  // hide it under genuine fullscreen apps. Skip while the menu is open.
+  keepOnTopTimer = setInterval(() => {
+    updateFullscreenVisibility()
+    if (petHwnd && !hiddenForFullscreen && !menuOpen) setTopmost(petHwnd)
+  }, 350)
+
+  stopCpuMonitor = startCpuMonitor((load) => send(IPC.cpuUpdate, load))
 })
 
 // Keep running with no windows: this is a tray-resident app.
@@ -134,5 +210,9 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   stopCpuMonitor?.()
+  if (keepOnTopTimer) {
+    clearInterval(keepOnTopTimer)
+    keepOnTopTimer = null
+  }
   destroyTray()
 })

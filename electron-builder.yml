@@ -6,6 +6,9 @@ directories:
 files:
   - out/**
   - package.json
+# koffi ships a native .node binary that must live outside the asar archive.
+asarUnpack:
+  - '**/node_modules/koffi/**'
 extraResources:
   - from: resources/tray.png
     to: tray.png
