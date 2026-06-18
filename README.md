@@ -8,7 +8,7 @@
 Inspired by the macOS app <i>Zoomies</i>.</p>
 
 <p>
-  <a href="https://github.com/Priyansh-max/deskpet/releases/latest">
+  <a href="https://github.com/Priyansh-max/deskpet/releases/download/v1.0.0/DeskPet_1.0.0_x64-setup.exe">
     <img src="https://img.shields.io/badge/Download-Windows%2010%20%7C%2011-2ea44f?style=for-the-badge&logo=windows&logoColor=white" alt="Download DeskPet for Windows" height="40">
   </a>
 </p>
@@ -34,10 +34,10 @@ Inspired by the macOS app <i>Zoomies</i>.</p>
 
 | File | Size | Architecture | Windows |
 | :--- | :--- | :--- | :--- |
-| **[DeskPet installer ↓](https://github.com/Priyansh-max/deskpet/releases/latest)** | ~2 MB | x64 (64-bit) | 10 · 11 |
+| **[DeskPet_1.0.0_x64-setup.exe ↓](https://github.com/Priyansh-max/deskpet/releases/download/v1.0.0/DeskPet_1.0.0_x64-setup.exe)** | ~2 MB | x64 (64-bit) | 10 · 11 |
 
 > Built with **Tauri** (uses the built-in WebView2 instead of bundling a browser), so the installer is only **~2 MB**.
-> The link opens the latest release — until the first one is published, [build from source](#getting-started).
+> Direct download of the **v1.0.0** installer; see all builds on the [Releases page](https://github.com/Priyansh-max/deskpet/releases).
 > Not code-signed yet, so SmartScreen may warn on first launch — click **More info → Run anyway**.
 
 ## ✨ Features
