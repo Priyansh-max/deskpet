@@ -208,6 +208,9 @@ fn build_tray(app: &AppHandle, selected: &str) -> tauri::Result<AppState> {
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![get_initial_state, open_menu])
+        // Handles events from the chip's popup menu (the tray menu uses the
+        // tray's own handler).
+        .on_menu_event(|app, event| handle_menu(app, event.id.as_ref()))
         .setup(|app| {
             let handle = app.handle().clone();
 
