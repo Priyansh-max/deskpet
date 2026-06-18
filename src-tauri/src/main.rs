@@ -74,7 +74,9 @@ fn get_initial_state(state: State<AppState>) -> InitialState {
 
 #[tauri::command]
 fn open_menu(window: tauri::WebviewWindow, state: State<AppState>) {
-    let _ = window.popup_menu(&state.menu);
+    // Anchor at the chip's top edge so the menu opens upward, above the chip,
+    // instead of at the cursor (which overlaps the chip).
+    let _ = window.popup_menu_at(&state.menu, tauri::LogicalPosition::new(0.0, 0.0));
 }
 
 fn select_pet(app: &AppHandle, pet: &str) {
