@@ -1,5 +1,20 @@
+@import './readout.css';
+
 :root {
   color-scheme: light dark;
+  /* Driven by JS (applyChipAppearance); these are pre-hydration fallbacks. */
+  --pill-rgb: 0, 0, 0;
+  --pill-opacity: 0.34;
+  --accent: rgba(255, 255, 255, 0.92);
+  --scale: 1;
+}
+
+/* Theme overrides the pill colour; accent (text) is set separately by the user. */
+[data-theme='light'] {
+  --pill-rgb: 245, 245, 247;
+}
+[data-theme='dark'] {
+  --pill-rgb: 0, 0, 0;
 }
 
 * {
@@ -29,7 +44,7 @@ body,
   justify-content: center;
 }
 
-/* The grouped pet + CPU% chip. */
+/* The grouped pet + metric chip. */
 .widget {
   appearance: none;
   display: flex;
@@ -38,13 +53,15 @@ body,
   padding: 6px 14px 6px 11px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.34);
-  color: rgba(255, 255, 255, 0.92);
+  background: rgba(var(--pill-rgb), var(--pill-opacity));
+  color: var(--accent);
   cursor: pointer;
+  /* Scale the whole chip from its centre; the window width tracks --scale too. */
+  transform: scale(var(--scale));
   transition: background 120ms ease;
 }
 .widget:hover {
-  background: rgba(0, 0, 0, 0.46);
+  background: rgba(var(--pill-rgb), min(1, calc(var(--pill-opacity) + 0.12)));
 }
 
 .widget__pet {
@@ -66,23 +83,5 @@ body,
   transform: scale(1.2);
 }
 
-.widget__cpu {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1;
-  color: inherit;
-  letter-spacing: 0.2px;
-  white-space: nowrap;
-}
-
-/*
- * Reserve a fixed two-digit slot for the number so the chip width doesn't change
- * between single- and double-digit readings.
- */
-.widget__num {
-  display: inline-block;
-  min-width: 2ch;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
+/* The readout (label / value / network / alert) lives in readout.css so the
+   taskbar chip and the settings-page preview render identically. */

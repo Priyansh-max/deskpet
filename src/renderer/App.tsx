@@ -1,46 +1,42 @@
 import { useEffect, useState } from 'react'
-import { DEFAULT_PREFERENCES, type PetType } from '../shared/types'
-import { Pet } from './Pet'
 import {
-  getInitialState,
-  onCpuUpdate,
-  onPetChanged,
-  onPauseChanged,
-  openMenu
-} from './tauri'
+  DEFAULT_METRICS,
+  DEFAULT_SETTINGS,
+  isAlerting,
+  type Metrics,
+  type Settings
+} from '../shared/types'
+import { Pet } from './Pet'
+import { Readout } from './Readout'
+import { applyChipAppearance } from './appearance'
+import { getSettings, onMetrics, onSettings, openMenu } from './tauri'
 
 export function App(): JSX.Element {
-  const [pet, setPet] = useState<PetType>(DEFAULT_PREFERENCES.selectedPet)
-  const [cpu, setCpu] = useState(0)
-  const [paused, setPaused] = useState(false)
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
+  const [metrics, setMetrics] = useState<Metrics>(DEFAULT_METRICS)
 
   useEffect(() => {
-    void getInitialState().then((state) => {
-      setPet(state.selectedPet)
-      setPaused(state.paused)
-    })
-
-    const unsubscribers = [
-      onCpuUpdate(setCpu),
-      onPetChanged(setPet),
-      onPauseChanged(setPaused)
-    ]
-
+    void getSettings().then(setSettings)
+    const unsubscribers = [onSettings(setSettings), onMetrics(setMetrics)]
     return () => unsubscribers.forEach((off) => off())
   }, [])
+
+  useEffect(() => {
+    applyChipAppearance(settings)
+  }, [settings])
+
+  const alerting = isAlerting(settings, metrics)
 
   return (
     <div className="deskpet">
       <button
         type="button"
-        className="widget"
+        className={`widget${alerting ? ' widget--alert' : ''}`}
         onClick={() => openMenu()}
         aria-label="DeskPet — open menu"
       >
-        <Pet pet={pet} cpu={cpu} paused={paused} />
-        <span className="widget__cpu">
-          <span className="widget__num">{Math.round(cpu)}</span>%
-        </span>
+        <Pet pet={settings.selectedPet} cpu={metrics.cpu} paused={settings.paused} settings={settings} />
+        <Readout settings={settings} metrics={metrics} />
       </button>
     </div>
   )
