@@ -1,21 +1,20 @@
 // Prevents an extra console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
-use sysinfo::System;
 use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Emitter, Manager, State, Wry};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, Wry};
 
+mod metrics;
+mod settings;
 #[cfg(windows)]
 mod win;
 
-/// Distance (logical px) the chip keeps from the tray end of the taskbar.
-const EDGE_OFFSET: f64 = 300.0;
+use settings::{load_settings, save_settings, Settings, SettingsPatch};
 
 const PETS: [(&str, &str); 5] = [
     ("cat", "Cat"),
@@ -25,51 +24,33 @@ const PETS: [(&str, &str); 5] = [
     ("fish", "Fish"),
 ];
 
-#[derive(Serialize)]
-struct InitialState {
-    #[serde(rename = "selectedPet")]
-    selected_pet: String,
-    paused: bool,
-}
-
-#[derive(Serialize, Deserialize, Default)]
-struct Prefs {
-    selected_pet: Option<String>,
-}
+/// Base chip width (logical px), sized for the labelled worst case ("CPU 100%");
+/// the network readout ("↓99.9M ↑99.9M") needs more room. Extra width is just
+/// transparent margin around the pill. Multiplied by the UI scale.
+#[cfg(windows)]
+const CHIP_WIDTH_PCT: f64 = 140.0;
+#[cfg(windows)]
+const CHIP_WIDTH_NET: f64 = 212.0;
+/// Reposition only when the chip drifts past this many physical px, so the
+/// periodic re-assert never flickers or fights the user/compositor.
+#[cfg(windows)]
+const DRIFT_PX: i32 = 2;
 
 struct AppState {
-    selected_pet: Mutex<String>,
-    paused: Mutex<bool>,
+    settings: Mutex<Settings>,
     menu: Menu<Wry>,
     pet_items: Vec<(String, CheckMenuItem<Wry>)>,
-    pause_item: CheckMenuItem<Wry>,
     config_path: PathBuf,
 }
 
-fn load_pref(path: &PathBuf) -> String {
-    fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<Prefs>(&s).ok())
-        .and_then(|p| p.selected_pet)
-        .filter(|p| PETS.iter().any(|(id, _)| id == p))
-        .unwrap_or_else(|| "cat".to_string())
-}
-
-fn save_pref(path: &PathBuf, pet: &str) {
-    let prefs = Prefs {
-        selected_pet: Some(pet.to_string()),
-    };
-    if let Ok(json) = serde_json::to_string(&prefs) {
-        let _ = fs::write(path, json);
-    }
+#[tauri::command]
+fn get_settings(state: State<AppState>) -> Settings {
+    state.settings.lock().unwrap().clone()
 }
 
 #[tauri::command]
-fn get_initial_state(state: State<AppState>) -> InitialState {
-    InitialState {
-        selected_pet: state.selected_pet.lock().unwrap().clone(),
-        paused: *state.paused.lock().unwrap(),
-    }
+fn update_settings(app: AppHandle, patch: SettingsPatch) {
+    apply_patch(&app, patch);
 }
 
 #[tauri::command]
@@ -79,37 +60,90 @@ fn open_menu(window: tauri::WebviewWindow, state: State<AppState>) {
     let _ = window.popup_menu_at(&state.menu, tauri::LogicalPosition::new(0.0, 0.0));
 }
 
-fn select_pet(app: &AppHandle, pet: &str) {
-    let state = app.state::<AppState>();
-    {
-        let mut sel = state.selected_pet.lock().unwrap();
-        if *sel == pet {
-            return;
-        }
-        *sel = pet.to_string();
-    }
-    save_pref(&state.config_path, pet);
-    for (id, item) in &state.pet_items {
-        let _ = item.set_checked(id == pet);
-    }
-    let _ = app.emit("pet", pet.to_string());
+#[tauri::command]
+fn open_settings(app: AppHandle) {
+    open_settings_window(&app);
 }
 
-fn toggle_pause(app: &AppHandle) {
+/// Open a URL in the default browser. Used by the settings "About" tab; avoids
+/// pulling in a shell/opener plugin for a couple of static links.
+#[tauri::command]
+fn open_url(url: String) {
+    #[cfg(windows)]
+    {
+        // `cmd /C start "" <url>` hands the URL to the default protocol handler.
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = url;
+    }
+}
+
+/// The single funnel for every settings mutation (settings window, tray menu,
+/// chip popup). Persists, re-syncs the tray, applies side effects, and
+/// broadcasts the new state so both windows reconcile from one source of truth.
+fn apply_patch(app: &AppHandle, patch: SettingsPatch) {
     let state = app.state::<AppState>();
-    let paused = {
-        let mut p = state.paused.lock().unwrap();
-        *p = !*p;
-        *p
+    let (before, after) = {
+        let mut s = state.settings.lock().unwrap();
+        let before = s.clone();
+        patch.merge_into(&mut s);
+        (before, s.clone())
     };
-    let _ = state.pause_item.set_checked(paused);
-    let _ = app.emit("pause", paused);
+
+    save_settings(&state.config_path, &after);
+    sync_tray(state.inner(), &after);
+
+    if before.autostart != after.autostart {
+        set_autostart(after.autostart);
+    }
+
+    #[cfg(windows)]
+    if needs_relayout(&before, &after) {
+        if let Some(window) = app.get_webview_window("main") {
+            relayout_chip(&window, &after);
+        }
+    }
+
+    let _ = app.emit("settings", after);
+}
+
+/// Keep the tray menu's pet checkmarks in sync with settings.
+fn sync_tray(state: &AppState, s: &Settings) {
+    for (id, item) in &state.pet_items {
+        let _ = item.set_checked(id == &s.selected_pet);
+    }
+}
+
+/// Reconcile the OS launch-at-login entry with the preference. No-op off Windows.
+fn set_autostart(enabled: bool) {
+    #[cfg(windows)]
+    {
+        win::set_autostart(enabled);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = enabled;
+    }
+}
+
+fn select_pet(app: &AppHandle, pet: &str) {
+    apply_patch(
+        app,
+        SettingsPatch {
+            selected_pet: Some(pet.to_string()),
+            ..Default::default()
+        },
+    );
 }
 
 fn handle_menu(app: &AppHandle, id: &str) {
     match id {
         "quit" => app.exit(0),
-        "pause" => toggle_pause(app),
+        "settings" => open_settings_window(app),
         other => {
             if let Some(pet) = other.strip_prefix("pet:") {
                 select_pet(app, pet);
@@ -118,39 +152,156 @@ fn handle_menu(app: &AppHandle, id: &str) {
     }
 }
 
-/// Place the chip in the taskbar band, near the system-tray end.
+/// Open the settings window, focusing the existing one if it's already open.
+fn open_settings_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+        return;
+    }
+    let _ = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
+        .title("DeskPet Settings")
+        .inner_size(720.0, 500.0)
+        .min_inner_size(640.0, 440.0)
+        .resizable(true)
+        .center()
+        .build();
+}
+
+/// Whether a settings change affects the chip's size or placement.
 #[cfg(windows)]
-fn position_chip(window: &tauri::WebviewWindow) {
-    if let Some(tb) = win::taskbar_rect() {
-        let scale = window.scale_factor().unwrap_or(1.0);
-        let width = window.outer_size().map(|s| s.width as i32).unwrap_or(160);
-        let offset = (EDGE_OFFSET * scale) as i32;
-        let x = tb.right - offset - width;
-        let _ = window.set_position(tauri::PhysicalPosition::new(x, tb.top));
+#[allow(clippy::float_cmp)]
+fn needs_relayout(a: &Settings, b: &Settings) -> bool {
+    a.metric != b.metric
+        || a.scale != b.scale
+        || a.edge_offset != b.edge_offset
+        || a.monitor != b.monitor
+}
+
+#[cfg(windows)]
+struct ChipLayout {
+    width_logical: f64,
+    height_logical: f64,
+    width_physical: i32,
+    height_physical: i32,
+    x: i32,
+    y: i32,
+}
+
+#[cfg(windows)]
+fn chip_logical_width(settings: &Settings) -> f64 {
+    let base = if settings.metric == "net" {
+        CHIP_WIDTH_NET
+    } else {
+        CHIP_WIDTH_PCT
+    };
+    base * settings.scale
+}
+
+/// Compute the chip's target size + position from the *live* taskbar geometry.
+/// Recomputed every tick (never cached) so DPI/resolution/taskbar changes are
+/// picked up automatically. The chip sits at the tray end of the taskbar band,
+/// `edge_offset` logical px in, and is sized to the band's thickness.
+#[cfg(windows)]
+fn compute_layout(window: &tauri::WebviewWindow, settings: &Settings) -> Option<ChipLayout> {
+    let tb = win::taskbar_rect_for(settings.monitor)?;
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let width_logical = chip_logical_width(settings);
+    let width_physical = (width_logical * scale) as i32;
+    let height_physical = tb.bottom - tb.top;
+    let offset = (settings.edge_offset * scale) as i32;
+    Some(ChipLayout {
+        width_logical,
+        height_logical: height_physical as f64 / scale,
+        width_physical,
+        height_physical,
+        x: tb.right - offset - width_physical,
+        y: tb.top,
+    })
+}
+
+/// Resize then reposition together — `x` depends on the width, so a width change
+/// (metric=net, scale) must move the chip in the same pass to avoid a jump.
+#[cfg(windows)]
+fn relayout_chip(window: &tauri::WebviewWindow, settings: &Settings) {
+    if let Some(l) = compute_layout(window, settings) {
+        let _ = window.set_size(tauri::LogicalSize::new(l.width_logical, l.height_logical));
+        let _ = window.set_position(tauri::PhysicalPosition::new(l.x, l.y));
     }
 }
 
-/// Keep the chip above the taskbar (which jumps above us when clicked) and hide
-/// it under genuine fullscreen apps — mirroring taskbar behaviour.
+/// Re-assert the chip's size and position when either has drifted (or when
+/// forced, e.g. after leaving fullscreen). This is the fix for the
+/// random-reposition bug. Size is re-asserted too so a DPI/taskbar-thickness
+/// change that happens off the relayout path still self-heals each tick.
 #[cfg(windows)]
-fn start_keep_alive(window: tauri::WebviewWindow) {
+fn reassert_layout(window: &tauri::WebviewWindow, settings: &Settings, force: bool) {
+    let Some(l) = compute_layout(window, settings) else {
+        return;
+    };
+    let size_drifted = match window.outer_size() {
+        Ok(sz) => {
+            (sz.width as i32 - l.width_physical).abs() > DRIFT_PX
+                || (sz.height as i32 - l.height_physical).abs() > DRIFT_PX
+        }
+        Err(_) => true,
+    };
+    // Size first: x already accounts for the (new) width, so set size then move.
+    if force || size_drifted {
+        let _ = window.set_size(tauri::LogicalSize::new(l.width_logical, l.height_logical));
+    }
+    let pos_drifted = match window.outer_position() {
+        Ok(pos) => (pos.x - l.x).abs() > DRIFT_PX || (pos.y - l.y).abs() > DRIFT_PX,
+        Err(_) => true,
+    };
+    if force || pos_drifted {
+        let _ = window.set_position(tauri::PhysicalPosition::new(l.x, l.y));
+    }
+}
+
+/// Keep the chip above the taskbar (which jumps above us when clicked), hide it
+/// under genuine fullscreen apps, and keep it pinned to the correct taskbar
+/// position even as the taskbar geometry changes.
+#[cfg(windows)]
+fn start_window_manager(app: AppHandle) {
     std::thread::spawn(move || {
         let mut hidden = false;
         loop {
             std::thread::sleep(Duration::from_millis(350));
+            let window = match app.get_webview_window("main") {
+                Some(w) => w,
+                None => continue,
+            };
             let raw = match window.hwnd() {
                 Ok(h) => h.0 as isize,
                 Err(_) => continue,
             };
             let hwnd = win::hwnd_from_raw(raw);
-            let (mw, mh) = window
-                .primary_monitor()
-                .ok()
-                .flatten()
-                .map(|m| (m.size().width as i32, m.size().height as i32))
-                .unwrap_or((i32::MAX, i32::MAX));
 
-            let fullscreen = win::is_foreground_fullscreen(hwnd, mw, mh);
+            let settings = { app.state::<AppState>().settings.lock().unwrap().clone() };
+
+            // Detect fullscreen relative to the monitor the chip actually lives
+            // on, so a fullscreen app on another monitor doesn't hide the chip
+            // (and resolution differences between monitors are handled).
+            let fullscreen = settings.hide_under_fullscreen
+                && window
+                    .current_monitor()
+                    .ok()
+                    .flatten()
+                    .map(|m| {
+                        let p = m.position();
+                        let s = m.size();
+                        win::foreground_covers(
+                            hwnd,
+                            p.x,
+                            p.y,
+                            p.x + s.width as i32,
+                            p.y + s.height as i32,
+                        )
+                    })
+                    .unwrap_or(false);
+
             if fullscreen && !hidden {
                 hidden = true;
                 let _ = window.hide();
@@ -158,37 +309,37 @@ fn start_keep_alive(window: tauri::WebviewWindow) {
                 hidden = false;
                 let _ = window.show();
                 win::set_topmost(hwnd);
-            } else if !fullscreen {
+                reassert_layout(&window, &settings, true);
+            } else if !hidden {
                 win::set_topmost(hwnd);
+                reassert_layout(&window, &settings, false);
             }
         }
     });
 }
 
-fn start_cpu_monitor(app: AppHandle) {
-    std::thread::spawn(move || {
-        let mut sys = System::new();
-        sys.refresh_cpu_usage();
-        loop {
-            std::thread::sleep(Duration::from_millis(1000));
-            sys.refresh_cpu_usage();
-            let _ = app.emit("cpu", sys.global_cpu_usage() as f64);
-        }
-    });
-}
-
-fn build_tray(app: &AppHandle, selected: &str) -> tauri::Result<AppState> {
+fn build_tray(app: &AppHandle, settings: &Settings) -> tauri::Result<AppState> {
     let mut pet_items: Vec<(String, CheckMenuItem<Wry>)> = Vec::new();
     for (id, label) in PETS.iter() {
-        let item = CheckMenuItem::with_id(app, format!("pet:{id}"), *label, true, *id == selected, None::<&str>)?;
+        let item = CheckMenuItem::with_id(
+            app,
+            format!("pet:{id}"),
+            *label,
+            true,
+            *id == settings.selected_pet.as_str(),
+            None::<&str>,
+        )?;
         pet_items.push((id.to_string(), item));
     }
-    let pet_refs: Vec<&dyn IsMenuItem<Wry>> = pet_items.iter().map(|(_, i)| i as &dyn IsMenuItem<Wry>).collect();
+    let pet_refs: Vec<&dyn IsMenuItem<Wry>> = pet_items
+        .iter()
+        .map(|(_, i)| i as &dyn IsMenuItem<Wry>)
+        .collect();
     let change_pet = Submenu::with_items(app, "Change Pet", true, &pet_refs)?;
-    let pause_item = CheckMenuItem::with_id(app, "pause", "Pause Animation", true, false, None::<&str>)?;
+    let settings_item = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&change_pet, &pause_item, &sep, &quit])?;
+    let menu = Menu::with_items(app, &[&change_pet, &settings_item, &sep, &quit])?;
 
     // Menu events (tray and chip popup) are handled by the global
     // Builder::on_menu_event so each event fires exactly once.
@@ -199,40 +350,55 @@ fn build_tray(app: &AppHandle, selected: &str) -> tauri::Result<AppState> {
         .build(app)?;
 
     Ok(AppState {
-        selected_pet: Mutex::new(selected.to_string()),
-        paused: Mutex::new(false),
+        settings: Mutex::new(settings.clone()),
         menu,
         pet_items,
-        pause_item,
         config_path: PathBuf::new(),
     })
 }
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_initial_state, open_menu])
-        // Handles events from the chip's popup menu (the tray menu uses the
-        // tray's own handler).
+        .invoke_handler(tauri::generate_handler![
+            get_settings,
+            update_settings,
+            open_menu,
+            open_settings,
+            open_url
+        ])
+        // Handles events from the chip's popup menu and the tray menu so each
+        // fires exactly once.
         .on_menu_event(|app, event| handle_menu(app, event.id.as_ref()))
         .setup(|app| {
             let handle = app.handle().clone();
 
-            let config_dir = handle.path().app_config_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let config_dir = handle
+                .path()
+                .app_config_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
             let _ = fs::create_dir_all(&config_dir);
             let config_path = config_dir.join("prefs.json");
-            let selected = load_pref(&config_path);
 
-            let mut state = build_tray(&handle, &selected)?;
+            let mut settings = load_settings(&config_path);
+            if !settings.remember_pause {
+                settings.paused = false;
+            }
+
+            let mut state = build_tray(&handle, &settings)?;
             state.config_path = config_path;
             app.manage(state);
 
+            // Keep the OS autostart entry in step with the saved preference (and
+            // pointed at the current exe, which matters after an update).
+            set_autostart(settings.autostart);
+
             #[cfg(windows)]
             if let Some(window) = handle.get_webview_window("main") {
-                position_chip(&window);
-                start_keep_alive(window);
+                relayout_chip(&window, &settings);
+                start_window_manager(handle.clone());
             }
 
-            start_cpu_monitor(handle);
+            metrics::start_metrics(handle);
             Ok(())
         })
         .run(tauri::generate_context!())

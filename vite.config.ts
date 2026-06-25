@@ -14,7 +14,15 @@ export default defineConfig({
   },
   build: {
     outDir: resolve(__dirname, 'dist'),
-    emptyOutDir: true
+    emptyOutDir: true,
+    // Two HTML entry points: the always-loaded taskbar chip and the settings
+    // window (loaded lazily via WebviewUrl::App("settings.html")).
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'src/renderer/index.html'),
+        settings: resolve(__dirname, 'src/renderer/settings.html')
+      }
+    }
   },
   resolve: {
     alias: {

@@ -1,0 +1,83 @@
+/*
+ * Chip readout — shared by the taskbar chip (styles.css) and the settings-page
+ * live preview (settings.css), so they always render identically.
+ */
+
+.widget__readout {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  line-height: 1;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.widget__label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  opacity: 0.7;
+  text-transform: uppercase;
+}
+
+.widget__value {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  /* Equal-width digits + a slot just big enough for "100%", so the chip stays
+     minimal yet never shifts as the reading ticks (e.g. 9% -> 100%). */
+  font-variant-numeric: tabular-nums;
+  min-width: 2.4em;
+  text-align: right;
+}
+
+/* Network: distinct download (↓) and upload (↑). The whole group reserves a
+   stable width (so the chip doesn't jitter as throughput changes) while each
+   arrow hugs its number and the two pairs sit close together. */
+.widget__net {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 7em;
+  font-size: 13px;
+  font-weight: 600;
+}
+.widget__net-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.widget__arrow {
+  font-weight: 700;
+}
+/* Green = incoming (download), blue = outgoing (upload). */
+.widget__arrow--down {
+  color: #57d977;
+}
+.widget__arrow--up {
+  color: #5ca8ff;
+}
+.widget__net .widget__num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Load alert: pulse the readout and give the pet a warning glow when the
+   watched metric is over the threshold. */
+@keyframes deskpet-alert-pulse {
+  0%,
+  100% {
+    color: var(--accent);
+  }
+  50% {
+    color: #ff5a4f;
+  }
+}
+.widget--alert .widget__label,
+.widget--alert .widget__value {
+  animation: deskpet-alert-pulse 0.9s ease-in-out infinite;
+}
+.widget--alert .widget__pet {
+  filter: drop-shadow(0 0 2px rgba(255, 80, 60, 0.95))
+    drop-shadow(0 0 4px rgba(255, 80, 60, 0.5));
+}

@@ -1,0 +1,408 @@
+@import './readout.css';
+
+:root {
+  color-scheme: light dark;
+  --bg: #1d1d21;
+  --surface: #292930;
+  --surface-2: #34343c;
+  --text: #f1f1f4;
+  --muted: #9a9aa4;
+  --border: rgba(255, 255, 255, 0.1);
+  /* Accent matches the app's logo amber (used across all controls). */
+  --ui-accent: #e8943a;
+  --logo: #e8943a;
+  /* Set by applyTheme() to the user's readout accent colour. */
+  --accent: #ffffff;
+}
+
+[data-theme='light'] {
+  --bg: #f3f3f6;
+  --surface: #ffffff;
+  --surface-2: #ececf1;
+  --text: #1b1b1f;
+  --muted: #6a6a72;
+  --border: rgba(0, 0, 0, 0.12);
+}
+
+@media (prefers-color-scheme: light) {
+  [data-theme='auto'] {
+    --bg: #f3f3f6;
+    --surface: #ffffff;
+    --surface-2: #ececf1;
+    --text: #1b1b1f;
+    --muted: #6a6a72;
+    --border: rgba(0, 0, 0, 0.12);
+  }
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  user-select: none;
+}
+
+/* ---- Layout: sidebar + content ---- */
+.settings {
+  display: flex;
+  height: 100%;
+}
+
+.sidebar {
+  width: 150px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 10px;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+}
+.sidebar__brand {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 4px 8px 12px;
+}
+.sidebar__tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.tab {
+  appearance: none;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  position: relative;
+}
+.tab:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+/* Selected tab: a clean light card with a very thin amber edge (logo colour). */
+.tab.is-active {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--logo);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Live preview header ---- */
+.preview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.preview__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--accent);
+}
+.preview__chip .widget__pet {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.preview__stats {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 18px;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat__label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+.stat__value {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- Tab panel ---- */
+.panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+}
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Big animated pet on the Pet tab. */
+.petstage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 136px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.petstage .widget__pet {
+  width: 104px;
+  height: 104px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.petgrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.petgrid__item {
+  appearance: none;
+  text-transform: capitalize;
+  padding: 8px 4px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.petgrid__item:hover {
+  background: var(--surface-2);
+}
+.petgrid__item.is-selected {
+  border-color: var(--ui-accent);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+
+/* ---- Rows / controls ---- */
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.row__head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.row__label {
+  font-weight: 500;
+}
+.row__hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+.row__control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.row__value {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  min-width: 56px;
+  text-align: right;
+}
+
+.segmented {
+  display: inline-flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.segmented__item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+.segmented__item:hover {
+  background: var(--surface-2);
+}
+.segmented__item.is-selected {
+  background: var(--ui-accent);
+  /* Dark text reads better on amber than white. */
+  color: #1b1b1f;
+}
+
+.toggle {
+  appearance: none;
+  border: none;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  cursor: pointer;
+  position: relative;
+  transition: background 140ms ease;
+}
+.toggle.is-on {
+  background: var(--ui-accent);
+}
+.toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 140ms ease;
+}
+.toggle.is-on .toggle__knob {
+  transform: translateX(18px);
+}
+
+input[type='range'] {
+  width: 150px;
+  accent-color: var(--ui-accent);
+  cursor: pointer;
+}
+select {
+  appearance: none;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+input[type='color'] {
+  appearance: none;
+  width: 34px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* ---- About tab ---- */
+.about__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.about__name {
+  font-size: 18px;
+  font-weight: 700;
+}
+.about__ver {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.about__desc {
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 42ch;
+}
+.about__links {
+  display: flex;
+  gap: 16px;
+}
+.about__credit {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 42ch;
+}
+.about__meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+.btn {
+  appearance: none;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.btn:hover {
+  background: var(--surface-2);
+}
+.link {
+  appearance: none;
+  background: none;
+  border: none;
+  color: var(--ui-accent);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  text-align: left;
+  vertical-align: baseline;
+}
+.link:hover {
+  text-decoration: underline;
+}
+
+/* ---- Reset button (sidebar footer) ---- */
+.btn-reset {
+  appearance: none;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.btn-reset:hover {
+  color: var(--text);
+  background: var(--surface);
+}
