@@ -4,17 +4,17 @@
 
 <p><b>A lightweight desktop companion that lives in your Windows taskbar and runs faster as your CPU heats up.</b></p>
 
-<p><i>Idle CPU → a slow stroll · Heavy load → full zoom — your PC activity, at a glance.</i><br/>
-Inspired by the macOS app <i>Zoomies</i>.</p>
+<p><i>Idle → a slow stroll · Heavy load → full zoom — your PC activity, at a glance.</i><br/>
+Inspired by <a href="https://kyome.io/runcat/"><i>RunCat</i></a>.</p>
 
 <p>
-  <a href="https://github.com/Priyansh-max/deskpet/releases/download/v1.0.0/DeskPet_1.0.0_x64-setup.exe">
+  <a href="https://github.com/Priyansh-max/deskpet/releases/download/v1.1.0/DeskPet_1.1.0_x64-setup.exe">
     <img src="https://img.shields.io/badge/Download-Windows%2010%20%7C%2011-2ea44f?style=for-the-badge&logo=windows&logoColor=white" alt="Download DeskPet for Windows" height="40">
   </a>
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/version-1.0.0-4c9aff?style=flat-square" alt="Version 1.0.0">
+  <img src="https://img.shields.io/badge/version-1.1.0-4c9aff?style=flat-square" alt="Version 1.1.0">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License: Apache 2.0"></a>
   <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Platform: Windows 10 | 11">
 </p>
@@ -34,72 +34,89 @@ Inspired by the macOS app <i>Zoomies</i>.</p>
 
 | File | Size | Architecture | Windows |
 | :--- | :--- | :--- | :--- |
-| **[DeskPet_1.0.0_x64-setup.exe ↓](https://github.com/Priyansh-max/deskpet/releases/download/v1.0.0/DeskPet_1.0.0_x64-setup.exe)** | ~2 MB | x64 (64-bit) | 10 · 11 |
+| **[DeskPet_1.1.0_x64-setup.exe ↓](https://github.com/Priyansh-max/deskpet/releases/download/v1.1.0/DeskPet_1.1.0_x64-setup.exe)** | ~2 MB | x64 (64-bit) | 10 · 11 |
 
 > Built with **Tauri** (uses the built-in WebView2 instead of bundling a browser), so the installer is only **~2 MB**.
-> Direct download of the **v1.0.0** installer; see all builds on the [Releases page](https://github.com/Priyansh-max/deskpet/releases).
+> See all builds on the [Releases page](https://github.com/Priyansh-max/deskpet/releases).
 > Not code-signed yet, so SmartScreen may warn on first launch — click **More info → Run anyway**.
 
 ## ✨ Features
 
-- 🐾 Lives **inside the taskbar** as a small chip — the pet plus a live CPU&nbsp;% readout
-- ⚡ Animation speed scales with CPU load (**3–18 FPS**): idle strolls, heavy load zooms
-- 🐱 **Five pets** — Cat, Dog, Horse, Bird, Fish
-- 🖱️ **Click the chip** for the menu: change pet · pause/resume · quit
-- 🖥️ Hides under fullscreen apps and stays put — behaves like a native taskbar element
-- 💾 Your chosen pet **persists** across restarts
+- 🐾 Lives **inside the taskbar** as a small chip — your pet plus a live system readout.
+- ⚡ **Animation speed scales with CPU load** — idle strolls, heavy load zooms. The speed range and ramp (sensitivity) are adjustable.
+- 📊 **Choose what the chip shows** — CPU %, RAM %, or live **network** throughput (↓ download / ↑ upload), with an optional text label.
+- 🚨 **Load alerts** — the readout pulses and the pet glows when the shown metric crosses a threshold (independent CPU and RAM thresholds).
+- 🐱 **Five pets** — Cat, Dog, Horse, Bird, Fish.
+- ⚙️ **Settings window** — a tabbed window (opened from the chip menu) for Pet, Readout, Animation, Appearance, Startup, and About.
+- 🎨 **Appearance** — transparent or custom-coloured pill, opacity, chip size, and an accent colour for the readout.
+- 🚀 **Launch at login**, remember pause state, and hide-under-fullscreen — all toggleable.
+- 🖥️ Stays pinned beside the system tray and **hides under fullscreen apps** — behaves like a native taskbar element, and returns to place even after DPI/resolution changes.
+- 💾 All settings **persist** across restarts.
+
+## 🖱️ Using it
+
+- **Click the chip** for the menu: **Change Pet**, **Settings…**, **Quit**.
+- Everything else — metric, animation speed, alerts, appearance, pause, and autostart — lives in **Settings…**.
 
 ## Tech Stack
 
-- **Tauri 2** + **Rust** — native shell that uses the system **WebView2** instead of bundling a browser (hence ~2 MB)
-- **React** + **TypeScript** (UI)
-- **sysinfo** (CPU monitoring)
-- **windows** crate (Win32 interop — taskbar placement, keep-on-top, fullscreen detection)
+- **Tauri 2** + **Rust** — native shell that uses the system **WebView2** instead of bundling a browser (hence ~2 MB).
+- **React** + **TypeScript** (UI).
+- **sysinfo** — CPU, memory, and network sampling.
+- **windows** crate — Win32 interop for taskbar placement, keep-on-top, fullscreen detection, and the launch-at-login registry entry.
 
 ## Getting Started
 
 Prerequisites: **Node.js**, the **Rust** toolchain, and **WebView2** (preinstalled on Windows 11).
 
 ```bash
-npm install         # install JS dependencies
-npm run tauri:dev   # run the app (builds the Rust backend + Vite frontend)
+npm install      # install JS dependencies
+npm run dev      # run the app (builds the Rust backend + Vite frontend)
 ```
 
 ## Build & Package
 
 ```bash
-npm run tauri:build  # build the app + Windows installer
+npm run build    # build the app + Windows installer
 ```
 
-The installer lands in `src-tauri/target/release/bundle/nsis/`.
+The installer lands in `src-tauri/target/release/bundle/nsis/` as `DeskPet_<version>_x64-setup.exe`.
 
 ## How It Works
 
 ```
-sysinfo (Rust backend)  ──"cpu" event──▶  React UI
-        every 1000ms                       fps = 3 + (cpu/100)*15, clamped to [3, 18]
+sysinfo (Rust)  ──"metrics" event (CPU · RAM · network) every 1000ms──▶  React UI
+                                            fps = minFps + (cpu/100)^sensitivity · (maxFps − minFps)
 ```
 
-The Rust backend samples CPU load once per second and emits a `cpu` event; the
-React UI maps it to a frame rate and advances the sprite. The chip is a
-transparent, always-on-top window kept in the taskbar band via Win32.
+The Rust backend samples CPU, memory, and network once per second and emits a single
+`metrics` event; the React UI maps **CPU** to a frame rate (regardless of which metric is
+displayed) and advances the sprite. Settings are the single source of truth — every change
+(tray menu or settings window) funnels through the backend, which persists it, syncs the
+tray, and broadcasts a `settings` event to all windows. A lightweight window manager keeps
+the chip pinned to the correct spot in the taskbar band even as the taskbar geometry changes
+(DPI, resolution, `explorer.exe` restarts) and hides it under genuine fullscreen apps.
 
 ## Project Structure
 
 ```
-src-tauri/                  # Rust backend (Tauri)
-├── src/main.rs                # window, tray menu, CPU events, persistence
-├── src/win.rs                 # Win32: taskbar placement, keep-on-top, fullscreen
-└── tauri.conf.json            # window + bundle config
+src-tauri/                     # Rust backend (Tauri)
+├── src/main.rs                   # windows, tray menu, settings funnel, events
+├── src/settings.rs               # persisted Settings schema (validation + back-compat)
+├── src/metrics.rs                # CPU / RAM / network sampling thread
+├── src/win.rs                    # Win32: taskbar placement, keep-on-top, fullscreen, autostart
+└── tauri.conf.json               # window + bundle config
 src/
-├── renderer/               # React UI
-│   ├── App.tsx
-│   ├── Pet.tsx
-│   ├── tauri.ts               # invoke/event bridge to the Rust backend
+├── renderer/                  # React UI
+│   ├── App.tsx                   # the taskbar chip
+│   ├── SettingsApp.tsx           # the settings window
+│   ├── Pet.tsx · Readout.tsx     # pet animation + the label/value readout
+│   ├── tauri.ts                  # invoke/event bridge to the backend
+│   ├── appearance.ts             # applies accent / background / scale as CSS vars
 │   ├── hooks/useAnimation.ts
 │   └── assets/{cat,dog,horse,bird,fish}/   # sprite frames
-└── shared/                 # shared types (PetType, cpuToFps, ...)
-scripts/slice-sprites.cjs   # slice real sprite sheets into frames
+└── shared/types.ts            # shared types (Settings, Metrics, PetType, …)
+scripts/slice-sprites.cjs      # slice real sprite sheets into frames
 ```
 
 ## Sprites

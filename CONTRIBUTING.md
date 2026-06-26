@@ -15,15 +15,13 @@ new pets, code cleanups, and docs.
    ```bash
    npm install
    ```
-3. **Generate** the placeholder sprite assets (only needed once, or after editing
-   the generator):
-   ```bash
-   npm run gen:assets
-   ```
-4. **Run** in development with hot reload:
+3. **Run** in development with hot reload (builds the Rust backend + Vite frontend):
    ```bash
    npm run dev
    ```
+
+Prerequisites: **Node.js**, the **Rust** toolchain, and **WebView2** (preinstalled on
+Windows 11). The sprite frames are committed, so no asset-generation step is needed.
 
 ## Development Workflow
 
@@ -43,24 +41,24 @@ new pets, code cleanups, and docs.
 ## Project Layout
 
 ```
+src-tauri/     # Rust backend (Tauri): windows, tray menu, settings, metrics, Win32 interop
 src/
-├── main/      # Electron main process: window, tray, CPU monitor, store
-├── preload/   # context-isolated IPC bridge
-├── renderer/  # React UI + sprite assets
-└── shared/    # types, constants, and IPC channel names used by both sides
+├── renderer/  # React UI (taskbar chip + settings window) + sprite assets
+└── shared/    # types and constants shared by the backend and renderer
 ```
 
 See the [README](README.md) for a fuller architecture overview.
 
 ## Adding a New Pet
 
-DeskPet was built so new pets need **no code changes** in the common case:
+DeskPet was built so new pets need almost no code changes:
 
-1. Add 8 transparent PNG frames to `src/renderer/assets/<pet>/`, named
-   `<pet>_1.png` … `<pet>_8.png`.
-2. Register the pet name in `src/shared/types.ts` (the `PetType` union and the
-   `PETS` array) and add a tray label in `src/main/tray.ts`.
-3. Run `npm run dev` and pick your pet from the tray menu.
+1. Add transparent PNG frames to `src/renderer/assets/<pet>/`, named
+   `<pet>_1.png`, `<pet>_2.png`, … (the frame count is flexible).
+2. Register the pet id in **both** `PETS` arrays — `src/shared/types.ts` (also add
+   it to the `PetType` union) and `src-tauri/src/main.rs`.
+3. Run `npm run dev` and pick your pet from the chip's **Change Pet** menu (or the
+   Settings → Pet tab).
 
 If you're contributing original artwork, please make sure you have the right to
 share it under this project's license.

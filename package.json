@@ -1,6 +1,6 @@
 {
   "name": "deskpet",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A lightweight Windows desktop pet that reacts to CPU load.",
   "author": "DeskPet",
   "license": "Apache-2.0",
