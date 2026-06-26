@@ -26,10 +26,11 @@
   font-weight: 600;
   letter-spacing: 0.2px;
   /* Equal-width digits + a slot just big enough for "100%", so the chip stays
-     minimal yet never shifts as the reading ticks (e.g. 9% -> 100%). */
+     minimal yet never shifts as the reading ticks (e.g. 9% -> 100%). Centered
+     so the slot's spare space splits evenly (symmetric padding). */
   font-variant-numeric: tabular-nums;
   min-width: 2.4em;
-  text-align: right;
+  text-align: center;
 }
 
 /* Network: distinct download (↓) and upload (↑). The whole group reserves a
@@ -38,6 +39,7 @@
 .widget__net {
   display: inline-flex;
   align-items: baseline;
+  justify-content: center;
   gap: 6px;
   min-width: 7em;
   font-size: 13px;

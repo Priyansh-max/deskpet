@@ -26,15 +26,14 @@ export function App(): JSX.Element {
   }, [settings])
 
   const alerting = isAlerting(settings, metrics)
+  const className =
+    'widget' +
+    (alerting ? ' widget--alert' : '') +
+    (settings.showBackground ? '' : ' widget--bare')
 
   return (
     <div className="deskpet">
-      <button
-        type="button"
-        className={`widget${alerting ? ' widget--alert' : ''}`}
-        onClick={() => openMenu()}
-        aria-label="DeskPet — open menu"
-      >
+      <button type="button" className={className} onClick={() => openMenu()} aria-label="DeskPet — open menu">
         <Pet pet={settings.selectedPet} cpu={metrics.cpu} paused={settings.paused} settings={settings} />
         <Readout settings={settings} metrics={metrics} />
       </button>

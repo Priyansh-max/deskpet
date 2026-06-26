@@ -8,21 +8,17 @@ import {
   PETS,
   formatBytesPerSec,
   isAlerting,
-  type AlertMetric,
   type MetricKind,
   type Metrics,
   type Settings,
-  type SettingsPatch,
-  type ThemeMode
+  type SettingsPatch
 } from '../shared/types'
 import { Pet } from './Pet'
 import { Readout } from './Readout'
-import { applyTheme } from './appearance'
+import { applyAccent, hexToRgb } from './appearance'
 import { getSettings, onMetrics, onSettings, openUrl, updateSettings } from './tauri'
 
 const METRICS: MetricKind[] = ['cpu', 'ram', 'net']
-const ALERT_METRICS: AlertMetric[] = ['cpu', 'ram']
-const THEMES: ThemeMode[] = ['auto', 'light', 'dark']
 
 const REPO_URL = 'https://github.com/Priyansh-max/deskpet'
 const RELEASES_URL = `${REPO_URL}/releases`
@@ -92,10 +88,10 @@ export function SettingsApp(): JSX.Element {
     }
   }
 
-  // Theme the settings window itself to match the chosen appearance.
+  // Keep the preview readout's accent colour in sync.
   useEffect(() => {
-    applyTheme(draft.theme, draft.accent)
-  }, [draft.theme, draft.accent])
+    applyAccent(draft.accent)
+  }, [draft.accent])
 
   // Esc closes the window; flush any queued edit first so it isn't lost.
   useEffect(() => {
@@ -149,7 +145,7 @@ export function SettingsApp(): JSX.Element {
   return (
     <div className="settings">
       <nav className="sidebar">
-        <div className="sidebar__brand">🐾 DeskPet</div>
+        <div className="sidebar__brand">DeskPet</div>
         <div className="sidebar__tabs">
           {TABS.map((t) => (
             <button
@@ -170,8 +166,16 @@ export function SettingsApp(): JSX.Element {
       <div className="content">
         <header className="preview">
           <div
-            className={`preview__chip${isAlerting(draft, metrics) ? ' widget--alert' : ''}`}
-            style={{ background: `rgba(0, 0, 0, ${draft.opacity})` }}
+            className={
+              'preview__chip' +
+              (isAlerting(draft, metrics) ? ' widget--alert' : '') +
+              (draft.showBackground ? '' : ' preview__chip--bare')
+            }
+            style={
+              draft.showBackground
+                ? { background: `rgba(${hexToRgb(draft.bgColor)}, ${draft.opacity})` }
+                : undefined
+            }
           >
             <Pet pet={draft.selectedPet} cpu={metrics.cpu} paused={draft.paused} settings={draft} />
             <Readout settings={draft} metrics={metrics} />
@@ -263,27 +267,29 @@ export function SettingsApp(): JSX.Element {
                   onCommit={flush}
                 />
               </Row>
-              <Row label="Load alert" hint="Flash the readout when load is high">
+              <Row label="Load alert" hint="Flash the displayed metric when it's high">
                 <Toggle
                   checked={draft.alertEnabled}
                   onChange={(alertEnabled) => commit({ alertEnabled })}
                 />
               </Row>
-              <Row label="Alert metric">
-                <Segmented
-                  options={ALERT_METRICS}
-                  value={draft.alertMetric}
-                  format={(m) => METRIC_LABELS[m]}
-                  onChange={(alertMetric) => commit({ alertMetric })}
-                />
-              </Row>
-              <Row label="Threshold" value={`${Math.round(draft.alertThreshold)}%`}>
+              <Row label="CPU threshold" value={`${Math.round(draft.cpuAlertThreshold)}%`}>
                 <Slider
-                  min={50}
+                  min={0}
                   max={100}
                   step={1}
-                  value={draft.alertThreshold}
-                  onChange={(v) => commit({ alertThreshold: v }, true)}
+                  value={draft.cpuAlertThreshold}
+                  onChange={(v) => commit({ cpuAlertThreshold: v }, true)}
+                  onCommit={flush}
+                />
+              </Row>
+              <Row label="RAM threshold" value={`${Math.round(draft.ramAlertThreshold)}%`}>
+                <Slider
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={draft.ramAlertThreshold}
+                  onChange={(v) => commit({ ramAlertThreshold: v }, true)}
                   onCommit={flush}
                 />
               </Row>
@@ -292,12 +298,18 @@ export function SettingsApp(): JSX.Element {
 
           {tab === 'appearance' && (
             <section className="section">
-              <Row label="Theme">
-                <Segmented
-                  options={THEMES}
-                  value={draft.theme}
-                  format={(t) => t[0].toUpperCase() + t.slice(1)}
-                  onChange={(theme) => commit({ theme })}
+              <Row label="Show background" hint="Off = transparent chip (pet only)">
+                <Toggle
+                  checked={draft.showBackground}
+                  onChange={(showBackground) => commit({ showBackground })}
+                />
+              </Row>
+              <Row label="Background" hint="Pill colour">
+                <input
+                  type="color"
+                  value={normalizeHex(draft.bgColor)}
+                  onChange={(e) => commit({ bgColor: e.target.value }, true)}
+                  onBlur={flush}
                 />
               </Row>
               <Row label="Opacity" value={`${Math.round(draft.opacity * 100)}%`}>
@@ -354,7 +366,7 @@ export function SettingsApp(): JSX.Element {
           {tab === 'about' && (
             <section className="section about">
               <div className="about__head">
-                <span className="about__name">🐾 DeskPet</span>
+                <span className="about__name">DeskPet</span>
                 {version && <span className="about__ver">v{version}</span>}
               </div>
               <p className="about__desc">

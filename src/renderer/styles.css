@@ -2,19 +2,12 @@
 
 :root {
   color-scheme: light dark;
-  /* Driven by JS (applyChipAppearance); these are pre-hydration fallbacks. */
+  /* Dark translucent pill (the taskbar is dark on both Windows themes). Opacity,
+     accent and scale are driven by JS (applyChipAppearance). */
   --pill-rgb: 0, 0, 0;
   --pill-opacity: 0.34;
   --accent: rgba(255, 255, 255, 0.92);
   --scale: 1;
-}
-
-/* Theme overrides the pill colour; accent (text) is set separately by the user. */
-[data-theme='light'] {
-  --pill-rgb: 245, 245, 247;
-}
-[data-theme='dark'] {
-  --pill-rgb: 0, 0, 0;
 }
 
 * {
@@ -50,7 +43,7 @@ body,
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px 6px 11px;
+  padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(var(--pill-rgb), var(--pill-opacity));
@@ -62,6 +55,13 @@ body,
 }
 .widget:hover {
   background: rgba(var(--pill-rgb), min(1, calc(var(--pill-opacity) + 0.12)));
+}
+
+/* Transparent chip: no pill, just the pet (+ readout) floating on the taskbar. */
+.widget--bare,
+.widget--bare:hover {
+  background: transparent;
+  border-color: transparent;
 }
 
 .widget__pet {

@@ -7,12 +7,6 @@ export const PETS: PetType[] = ['cat', 'dog', 'horse', 'bird', 'fish']
 /** Which metric the chip displays. Animation speed is always driven by CPU. */
 export type MetricKind = 'cpu' | 'ram' | 'net'
 
-/** Appearance theme for the chip (and the settings window). */
-export type ThemeMode = 'auto' | 'light' | 'dark'
-
-/** Which metric the load alert watches (percentage metrics only). */
-export type AlertMetric = 'cpu' | 'ram'
-
 /** Number of animation frames per pet (cat_1.png ... cat_8.png). */
 export const FRAME_COUNT = 8
 
@@ -44,8 +38,11 @@ export interface Settings {
   /** Curve exponent: >1 ramps calmly at low load, <1 is eager. */
   sensitivity: number
   // Appearance.
-  theme: ThemeMode
-  /** Pill background alpha, 0..1. */
+  /** Show the pill background; when false the chip is transparent (pet only). */
+  showBackground: boolean
+  /** Pill background colour (hex), combined with opacity. */
+  bgColor: string
+  /** Pill background alpha, 0..1 (when the background is shown). */
   opacity: number
   /** Chip UI scale (content + window width grow together). */
   scale: number
@@ -61,11 +58,12 @@ export interface Settings {
   edgeOffset: number
   /** Monitor index, 0 = primary. Secondary support is best-effort. */
   monitor: number
-  // Load alert: visibly react when the watched metric crosses the threshold.
+  // Load alert: react when the *displayed* metric crosses its own threshold.
   alertEnabled: boolean
-  alertMetric: AlertMetric
-  /** Trigger percentage, 1..100. */
-  alertThreshold: number
+  /** Trigger percentage for CPU, 0..100. */
+  cpuAlertThreshold: number
+  /** Trigger percentage for RAM, 0..100. */
+  ramAlertThreshold: number
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -77,7 +75,8 @@ export const DEFAULT_SETTINGS: Settings = {
   minFps: MIN_FPS,
   maxFps: MAX_FPS,
   sensitivity: 1,
-  theme: 'auto',
+  showBackground: true,
+  bgColor: '#000000',
   opacity: 0.34,
   scale: 1,
   accent: '#ffffff',
@@ -87,8 +86,8 @@ export const DEFAULT_SETTINGS: Settings = {
   edgeOffset: 300,
   monitor: 0,
   alertEnabled: true,
-  alertMetric: 'cpu',
-  alertThreshold: 90
+  cpuAlertThreshold: 90,
+  ramAlertThreshold: 90
 }
 
 /** A partial update to settings; only present fields are applied + clamped server-side. */
@@ -156,12 +155,16 @@ export function formatMetricValue(metric: MetricKind, m: Metrics): string {
   }
 }
 
-/** Whether the load alert should fire for the current metrics. */
+/**
+ * Whether the load alert should fire — tied to the *displayed* metric, each
+ * with its own threshold. Network has no alert.
+ */
 export function isAlerting(
-  s: Pick<Settings, 'alertEnabled' | 'alertMetric' | 'alertThreshold'>,
+  s: Pick<Settings, 'alertEnabled' | 'metric' | 'cpuAlertThreshold' | 'ramAlertThreshold'>,
   m: Metrics
 ): boolean {
   if (!s.alertEnabled) return false
-  const value = s.alertMetric === 'ram' ? m.ramPct : m.cpu
-  return value >= s.alertThreshold
+  if (s.metric === 'cpu') return m.cpu >= s.cpuAlertThreshold
+  if (s.metric === 'ram') return m.ramPct >= s.ramAlertThreshold
+  return false
 }

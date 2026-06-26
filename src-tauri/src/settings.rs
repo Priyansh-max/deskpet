@@ -27,7 +27,8 @@ pub struct Settings {
     pub min_fps: f64,
     pub max_fps: f64,
     pub sensitivity: f64,
-    pub theme: String,
+    pub show_background: bool,
+    pub bg_color: String,
     pub opacity: f64,
     pub scale: f64,
     pub accent: String,
@@ -37,8 +38,8 @@ pub struct Settings {
     pub edge_offset: f64,
     pub monitor: u32,
     pub alert_enabled: bool,
-    pub alert_metric: String,
-    pub alert_threshold: f64,
+    pub cpu_alert_threshold: f64,
+    pub ram_alert_threshold: f64,
 }
 
 impl Default for Settings {
@@ -52,7 +53,8 @@ impl Default for Settings {
             min_fps: 3.0,
             max_fps: 18.0,
             sensitivity: 1.0,
-            theme: "auto".to_string(),
+            show_background: true,
+            bg_color: "#000000".to_string(),
             opacity: 0.34,
             scale: 1.0,
             accent: "#ffffff".to_string(),
@@ -62,8 +64,8 @@ impl Default for Settings {
             edge_offset: 300.0,
             monitor: 0,
             alert_enabled: true,
-            alert_metric: "cpu".to_string(),
-            alert_threshold: 90.0,
+            cpu_alert_threshold: 90.0,
+            ram_alert_threshold: 90.0,
         }
     }
 }
@@ -81,9 +83,6 @@ impl Settings {
         if !matches!(self.metric.as_str(), "cpu" | "ram" | "net") {
             self.metric = d.metric;
         }
-        if !matches!(self.theme.as_str(), "auto" | "light" | "dark") {
-            self.theme = d.theme;
-        }
         if !self.min_fps.is_finite() {
             self.min_fps = d.min_fps;
         }
@@ -96,10 +95,10 @@ impl Settings {
         self.opacity = clamp_finite(self.opacity, 0.0, 1.0, d.opacity);
         self.scale = clamp_finite(self.scale, 0.6, 2.0, d.scale);
         self.edge_offset = clamp_finite(self.edge_offset, 0.0, 4000.0, d.edge_offset);
-        if !matches!(self.alert_metric.as_str(), "cpu" | "ram") {
-            self.alert_metric = d.alert_metric;
-        }
-        self.alert_threshold = clamp_finite(self.alert_threshold, 1.0, 100.0, d.alert_threshold);
+        self.cpu_alert_threshold =
+            clamp_finite(self.cpu_alert_threshold, 0.0, 100.0, d.cpu_alert_threshold);
+        self.ram_alert_threshold =
+            clamp_finite(self.ram_alert_threshold, 0.0, 100.0, d.ram_alert_threshold);
         // `accent` is validated by the renderer; `monitor` is best-effort.
     }
 }
@@ -124,7 +123,8 @@ pub struct SettingsPatch {
     pub min_fps: Option<f64>,
     pub max_fps: Option<f64>,
     pub sensitivity: Option<f64>,
-    pub theme: Option<String>,
+    pub show_background: Option<bool>,
+    pub bg_color: Option<String>,
     pub opacity: Option<f64>,
     pub scale: Option<f64>,
     pub accent: Option<String>,
@@ -134,8 +134,8 @@ pub struct SettingsPatch {
     pub edge_offset: Option<f64>,
     pub monitor: Option<u32>,
     pub alert_enabled: Option<bool>,
-    pub alert_metric: Option<String>,
-    pub alert_threshold: Option<f64>,
+    pub cpu_alert_threshold: Option<f64>,
+    pub ram_alert_threshold: Option<f64>,
 }
 
 impl SettingsPatch {
@@ -162,8 +162,11 @@ impl SettingsPatch {
         if let Some(v) = self.sensitivity {
             s.sensitivity = v;
         }
-        if let Some(v) = self.theme {
-            s.theme = v;
+        if let Some(v) = self.show_background {
+            s.show_background = v;
+        }
+        if let Some(v) = self.bg_color {
+            s.bg_color = v;
         }
         if let Some(v) = self.opacity {
             s.opacity = v;
@@ -192,11 +195,11 @@ impl SettingsPatch {
         if let Some(v) = self.alert_enabled {
             s.alert_enabled = v;
         }
-        if let Some(v) = self.alert_metric {
-            s.alert_metric = v;
+        if let Some(v) = self.cpu_alert_threshold {
+            s.cpu_alert_threshold = v;
         }
-        if let Some(v) = self.alert_threshold {
-            s.alert_threshold = v;
+        if let Some(v) = self.ram_alert_threshold {
+            s.ram_alert_threshold = v;
         }
         s.normalize();
     }
@@ -254,10 +257,9 @@ mod tests {
 
     #[test]
     fn invalid_enums_reset_to_defaults() {
-        let s = parse(r#"{"selectedPet":"dragon","metric":"gpu","theme":"neon"}"#);
+        let s = parse(r#"{"selectedPet":"dragon","metric":"gpu"}"#);
         assert_eq!(s.selected_pet, "cat");
         assert_eq!(s.metric, "cpu");
-        assert_eq!(s.theme, "auto");
     }
 
     #[test]
